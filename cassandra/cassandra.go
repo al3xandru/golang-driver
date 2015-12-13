@@ -190,6 +190,18 @@ func (result *Result) Scan(args ...interface{}) error {
 		//return errors.New(C.GoString(C.cass_error_desc(err)))
 		//}
 		//*v = C.GoBytes(unsafe.Pointer(b), C.int(size))
+		case *int8: // tinyint
+			var i8 C.cass_int8_t
+			if err = C.cass_value_get_int8(value, &i8); err != C.CASS_OK {
+				return errors.New(C.GoString(C.cass_error_desc(err)))
+			}
+			*v = int8(i8)
+		case *int16: // smallint
+			var i16 C.cass_int16_t
+			if err = C.cass_value_get_int16(value, &i16); err != C.CASS_OK {
+				return errors.New(C.GoString(C.cass_error_desc(err)))
+			}
+			*v = int16(i16)
 		case *int32:
 			var i32 C.cass_int32_t
 			err = C.cass_value_get_int32(value, &i32)
@@ -197,7 +209,12 @@ func (result *Result) Scan(args ...interface{}) error {
 				return errors.New(C.GoString(C.cass_error_desc(err)))
 			}
 			*v = int32(i32)
-
+		case *uint32:
+			var u32 C.cass_uint32_t
+			if err = C.cass_value_get_uint32(value, &u32); err != C.CASS_OK {
+				return errors.New(C.GoString(C.cass_error_desc(err)))
+			}
+			*v = uint32(u32)
 		case *int64:
 			var i64 C.cass_int64_t
 			err = C.cass_value_get_int64(value, &i64)
@@ -229,7 +246,20 @@ func (result *Result) Scan(args ...interface{}) error {
 				return errors.New(C.GoString(C.cass_error_desc(err)))
 			}
 			*v = bool(b != 0)
+		case *Time:
+			var i64 C.cass_int64_t
+			err = C.cass_value_get_int64(value, &i64)
+			if err != C.CASS_OK {
+				return errors.New(C.GoString(C.cass_error_desc(err)))
+			}
+			v.Nanos = int64(i64)
+		case *Date:
+			var u32 C.cass_uint32_t
+			if err = C.cass_value_get_uint32(value, &u32); err != C.CASS_OK {
+				return errors.New(C.GoString(C.cass_error_desc(err)))
+			}
 
+			v.Days = uint32(u32)
 		default:
 			return errors.New("unsupported type in Scan: " + reflect.TypeOf(v).String())
 		}
@@ -237,4 +267,3 @@ func (result *Result) Scan(args ...interface{}) error {
 
 	return nil
 }
-
