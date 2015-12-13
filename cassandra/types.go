@@ -6,6 +6,8 @@ import (
 	"time"
 )
 
+type Timestamp int64
+
 // Cassandra Date is a 32-bit unsigned integer representing
 // the number of days with Epoch (1970-1-1) at the center of the range
 type Date struct {

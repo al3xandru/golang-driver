@@ -253,6 +253,7 @@ func (result *Result) Scan(args ...interface{}) error {
 				return errors.New(C.GoString(C.cass_error_desc(err)))
 			}
 			v.Nanos = int64(i64)
+
 		case *Date:
 			var u32 C.cass_uint32_t
 			if err = C.cass_value_get_uint32(value, &u32); err != C.CASS_OK {
@@ -260,6 +261,15 @@ func (result *Result) Scan(args ...interface{}) error {
 			}
 
 			v.Days = uint32(u32)
+
+		case *Timestamp:
+			var i64 C.cass_int64_t
+			err = C.cass_value_get_int64(value, &i64)
+			if err != C.CASS_OK {
+				return errors.New(C.GoString(C.cass_error_desc(err)))
+			}
+			*v = Timestamp(i64)
+
 		default:
 			return errors.New("unsupported type in Scan: " + reflect.TypeOf(v).String())
 		}

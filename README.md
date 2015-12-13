@@ -56,10 +56,11 @@ func main() {
 
 ### To do
 
-* Binding values to statements
-* Prepared statements
-* Async API
-* Advanced cluster configuration
-* Support for collections
-* Support for tuples
-* Support for UDTs
+* [X] Date time types
+* [ ] Binding values to statements
+* [ ] Prepared statements
+* [ ] Async API
+* [ ] Advanced cluster configuration
+* [ ] Support for collections
+* [ ] Support for tuples
+* [ ] Support for UDTs
