@@ -1,14 +1,17 @@
 golang-driver
 =============
 
-Golang wrapper of the DataStax/Cassandra [C/C++ driver](https://github.com/datastax/cpp-driver)
+A Go wrapper for the DataStax/Cassandra [C/C++ driver](https://github.com/datastax/cpp-driver)
 
-Basic support for prepared statements and ad hoc queries. Lacking support for collections, but that will be remedied shortly.
+This is my Go and C learning experience so treat it as an experiment. It builds
+on the work of Matt Stump's
+[golang-driver](https://github.com/mstump/golang-driver) and uses the version
+2.2 of the [DataStax C/C++ driver for Cassandra](https://github.com/datastax/cpp-driver).
 
 ### Build
 
 1. Build and install the DataStax [C/C++ driver](https://github.com/datastax/cpp-driver)
-1. Install `go get github.com/mstump/golang-driver/cassandra`
+1. Install `go get github.com/al3xnadru/golang-driver/cassandra`
 1. Run the example `go run $GOPATH/src/github.com/mstump/golang-driver/examples/basic.go`
 
 ### Example Usage
@@ -22,34 +25,41 @@ import (
 )
 
 func main() {
-	cluster := cassandra.NewCluster()
-	cluster.SetContactPoints("cassandra")
-	defer cluster.Finalize()
+	cluster := cassandra.NewCluster("127.0.0.1", "127.0.0.2")
+	defer cluster.Close()
 
-	session := cassandra.NewSession()
-	defer session.Finalize()
-
-	sessfuture := cluster.SessionConnect(session)
-	sessfuture.Wait()
-	defer sessfuture.Finalize()
-
-	statement := cassandra.NewStatement("select cluster_name from system.local;", 0)
-	defer statement.Finalize()
-
-	stmtfuture := session.Execute(statement)
-	stmtfuture.Wait()
-	defer stmtfuture.Finalize()
-
-	result := stmtfuture.Result()
-	defer result.Finalize()
-
-	fmt.Printf("Clusters:\r\n")
-	for result.Next() {
-		var clusterName string
-		result.Scan(&clusterName)
-		fmt.Printf("%s\n", clusterName)
+	session, err := cluster.Connect()
+	if err != nil {
+		fmt.Printf("Error connecting: %s\n", err.Error())
+		return
 	}
+	defer session.Close()
 
-	fmt.Printf("DONE.\r\n")
+	result, err := session.Execute("select keyspace_name from system.schema_keyspaces")
+	if err != nil {
+		fmt.Printf("Error executing: %s\n", err.Error())
+		return
+	}
+	defer result.Close()
+
+	fmt.Printf("Keyspaces:\n")
+	for result.Next() {
+		var keyspace string
+		if err := result.Scan(&keyspace); err != nil {
+			fmt.Printf("Row error: %s\n", err.Error())
+			continue
+		}
+		fmt.Printf("%s\n", keyspace)
+	}
 }
 ```
+
+### To do
+
+* Binding values to statements
+* Prepared statements
+* Async API
+* Advanced cluster configuration
+* Support for collections
+* Support for tuples
+* Support for UDTs
