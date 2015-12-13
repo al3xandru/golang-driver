@@ -56,6 +56,7 @@ func main() {
 
 ### To do
 
+* [X] Cassandra `tinyint` (`int8`) and `smallint` (`int16`)
 * [X] Date time types
 * [ ] Binding values to statements
 * [ ] Prepared statements
