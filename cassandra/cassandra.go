@@ -1,238 +1,110 @@
 package cassandra
 
-// #cgo LDFLAGS: -lcassandra
+// #cgo LDFLAGS: -L/usr/local/lib -lcassandra
+// #cgo CFLAGS: -I/usr/local/include
 // #include <stdlib.h>
 // #include <cassandra.h>
 import "C"
-import "unsafe"
-import "errors"
-import "reflect"
-
-const (
-	CASS_VALUE_TYPE_UNKNOWN   = 0xFFFF
-	CASS_VALUE_TYPE_CUSTOM    = 0x0000
-	CASS_VALUE_TYPE_ASCII     = 0x0001
-	CASS_VALUE_TYPE_BIGINT    = 0x0002
-	CASS_VALUE_TYPE_BLOB      = 0x0003
-	CASS_VALUE_TYPE_BOOLEAN   = 0x0004
-	CASS_VALUE_TYPE_COUNTER   = 0x0005
-	CASS_VALUE_TYPE_DECIMAL   = 0x0006
-	CASS_VALUE_TYPE_DOUBLE    = 0x0007
-	CASS_VALUE_TYPE_FLOAT     = 0x0008
-	CASS_VALUE_TYPE_INT       = 0x0009
-	CASS_VALUE_TYPE_TEXT      = 0x000A
-	CASS_VALUE_TYPE_TIMESTAMP = 0x000B
-	CASS_VALUE_TYPE_UUID      = 0x000C
-	CASS_VALUE_TYPE_VARCHAR   = 0x000D
-	CASS_VALUE_TYPE_VARINT    = 0x000E
-	CASS_VALUE_TYPE_TIMEUUID  = 0x000F
-	CASS_VALUE_TYPE_INET      = 0x0010
-	CASS_VALUE_TYPE_LIST      = 0x0020
-	CASS_VALUE_TYPE_MAP       = 0x0021
-	CASS_VALUE_TYPE_SET       = 0x0022
+import (
+	"errors"
+	"fmt"
+	"reflect"
+	"strings"
 )
+import "unsafe"
+
+//import "errors"
+//import "reflect"
 
 type Cluster struct {
 	cptr *C.struct_CassCluster_
-}
-
-type Future struct {
-	cptr *C.struct_CassFuture_
 }
 
 type Session struct {
 	cptr *C.struct_CassSession_
 }
 
-type Result struct {
-	iter *C.struct_CassIterator_
-	cptr *C.struct_CassResult_
-}
-
-type Prepared struct {
-	cptr *C.struct_CassPrepared_
-}
-
-type Statement struct {
-	cptr *C.struct_CassStatement_
-}
-
-type Uuid struct {
-	cptr *C.struct_CassUuid_
-}
-
-type UuidGenerator struct {
-	cptr *C.struct_CassUuidGen_
-}
-
-func NewCluster() *Cluster {
+func NewCluster(contactPoints ...string) *Cluster {
 	cluster := new(Cluster)
 	cluster.cptr = C.cass_cluster_new()
-	// defer cluster.Finalize()
+	cContactPoints := C.CString(strings.Join(contactPoints, ","))
+	defer C.free(unsafe.Pointer(cContactPoints))
+	C.cass_cluster_set_contact_points(cluster.cptr, cContactPoints)
 
 	return cluster
 }
 
-func NewSession() *Session {
-	session := new(Session)
-	session.cptr = C.cass_session_new()
-	return session
-}
-
-func NewStatement(query string, param_count int) *Statement {
-	var cass_query C.struct_CassString_
-	cass_query.data = C.CString(query)
-	cass_query.length = C.cass_size_t(len(query))
-	defer C.free(unsafe.Pointer(cass_query.data))
-
-	statement := new(Statement)
-	statement.cptr = C.cass_statement_new(cass_query, C.cass_size_t(param_count))
-	// defer statement.Finalize()
-	return statement
-}
-
-func NewUuidGenerator() *UuidGenerator {
-	generator := new(UuidGenerator)
-	generator.cptr = C.cass_uuid_gen_new()
-	return generator
-}
-
-func NewUuidGeneratorWithNode(node uint64) *UuidGenerator {
-	generator := new(UuidGenerator)
-	generator.cptr = C.cass_uuid_gen_new_with_node(C.cass_uint64_t(node))
-	return generator
-}
-
-func (generator *UuidGenerator) NewUuidGenTime() *Uuid {
-	uuid := new(Uuid)
-	C.cass_uuid_gen_time(generator.cptr, uuid.cptr)
-	return uuid
-}
-
-func (generator *UuidGenerator) NewUuidGenRandom() *Uuid {
-	uuid := new(Uuid)
-	C.cass_uuid_gen_random(generator.cptr, uuid.cptr)
-	return uuid
-}
-
-func (generator *UuidGenerator) NewUuidFromTime(timestamp uint64) *Uuid {
-	uuid := new(Uuid)
-	C.cass_uuid_gen_from_time(generator.cptr, C.cass_uint64_t(timestamp), uuid.cptr)
-	return uuid
-}
-
-
-func (prepared *Prepared) Bind() *Statement {
-	statement := new(Statement)
-	statement.cptr = C.cass_prepared_bind(prepared.cptr)
-	// defer statement.Finalize()
-	return statement
-}
-
-func (statement *Statement) Bind(args ...interface{}) error {
-	var err C.CassError = C.CASS_OK
-
-	for i, v := range args {
-
-		switch v := v.(type) {
-
-		case nil:
-			err = C.cass_statement_bind_null(statement.cptr, C.cass_size_t(i))
-
-		case int32:
-			err = C.cass_statement_bind_int32(statement.cptr, C.cass_size_t(i), C.cass_int32_t(v))
-
-		case int64:
-			err = C.cass_statement_bind_int64(statement.cptr, C.cass_size_t(i), C.cass_int64_t(v))
-
-		case float32:
-			err = C.cass_statement_bind_float(statement.cptr, C.cass_size_t(i), C.cass_float_t(v))
-
-		case float64:
-			err = C.cass_statement_bind_double(statement.cptr, C.cass_size_t(i), C.cass_double_t(v))
-
-		case bool:
-			if v {
-				err = C.cass_statement_bind_bool(statement.cptr, C.cass_size_t(i), 1)
-			} else {
-				err = C.cass_statement_bind_bool(statement.cptr, C.cass_size_t(i), 0)
-			}
-
-		case string:
-			var str C.CassString
-			str.data = C.CString(v)
-			str.length = C.cass_size_t(len(v))
-			defer C.free(unsafe.Pointer(str.data))
-			err = C.cass_statement_bind_string(statement.cptr, C.cass_size_t(i), str)
-
-		case []byte:
-			var bytes C.CassBytes
-			bytes.data = (*C.cass_byte_t)(unsafe.Pointer(&v))
-			bytes.size = C.cass_size_t(len(v))
-			err = C.cass_statement_bind_bytes(statement.cptr, C.cass_size_t(i), bytes)
-
-		case *Uuid:
-			C.cass_statement_bind_uuid(statement.cptr, C.cass_size_t(i), *v.cptr)
-		}
-
-	}
-
-	if err != C.CASS_OK {
-		return errors.New(C.GoString(C.cass_error_desc(err)))
-	}
-
-	return nil
-}
-
-func (cluster *Cluster) Finalize() {
+func (cluster *Cluster) Close() {
 	C.cass_cluster_free(cluster.cptr)
 	cluster.cptr = nil
 }
 
-func (session *Session) Finalize() {
+func (cluster *Cluster) Connect() (*Session, error) {
+	session := new(Session)
+	session.cptr = C.cass_session_new()
+
+	future := NewFuture(func() *C.struct_CassFuture_ {
+		return C.cass_session_connect(session.cptr, cluster.cptr)
+	})
+	defer future.Close()
+
+	if err := future.Error(); err != nil {
+		return nil, err
+	}
+	return session, nil
+}
+
+func (session *Session) Close() {
 	C.cass_session_free(session.cptr)
 	session.cptr = nil
 }
 
-func (future *Future) Finalize() {
-	C.cass_future_free(future.cptr)
-	future.cptr = nil
+func (session *Session) Execute(query string, args ...interface{}) (*Result, error) {
+	cQuery := C.CString(query)
+	defer C.free(unsafe.Pointer(cQuery))
+
+	stmt := C.cass_statement_new(cQuery, C.size_t(len(args)))
+	defer C.cass_statement_free(stmt)
+
+	future := NewFuture(func() *C.struct_CassFuture_ {
+		return C.cass_session_execute(session.cptr, stmt)
+	})
+	defer future.Close()
+
+	if err := future.Error(); err != nil {
+		fmt.Printf("Execute: %s\r\n", err.Error())
+		return nil, err
+	}
+	future.Wait()
+	return future.Result(), nil
 }
 
-func (result *Result) Finalize() {
-	C.cass_result_free(result.cptr)
-	result.cptr = nil
+type Future struct {
+	cptr *C.struct_CassFuture_
 }
 
-func (prepared *Prepared) Finalize() {
-	C.cass_prepared_free(prepared.cptr)
-	prepared.cptr = nil
+type FutureFunc func() *C.struct_CassFuture_
+
+func NewFuture(f FutureFunc) *Future {
+	ptrFuture := f()
+	return &Future{ptrFuture}
 }
 
-func (statement *Statement) Finalize() {
-	C.cass_statement_free(statement.cptr)
-	statement.cptr = nil
+func (future *Future) Error() error {
+	if C.cass_future_error_code(future.cptr) == C.CASS_OK {
+		return nil
+	}
+	var msg *C.char
+	var sizet C.size_t
+
+	C.cass_future_error_message(future.cptr, &msg, &sizet)
+	return errors.New(C.GoStringN(msg, C.int(sizet)))
 }
-
-func (generator *UuidGenerator) Finalize() {
-	C.cass_uuid_gen_free(generator.cptr)
-	generator.cptr = nil
-}
-
-
 
 func (future *Future) Result() *Result {
 	result := new(Result)
 	result.cptr = C.cass_future_get_result(future.cptr)
-	// defer result.Finalize()
 	return result
-}
-
-func (future *Future) Prepared() *Prepared {
-	prepared := new(Prepared)
-	prepared.cptr = C.cass_future_get_prepared(future.cptr)
-	// defer prepared.Finalize()
-	return prepared
 }
 
 func (future *Future) Ready() bool {
@@ -247,27 +119,19 @@ func (future *Future) WaitTimed(timeout uint64) bool {
 	return C.cass_future_wait_timed(future.cptr, C.cass_duration_t(timeout)) == C.cass_true
 }
 
-func (cluster *Cluster) SetContactPoints(contactPoints string) {
-	contacts_cstr := C.CString(contactPoints)
-	defer C.free(unsafe.Pointer(contacts_cstr))
-	C.cass_cluster_set_contact_points(cluster.cptr, contacts_cstr)
+func (future *Future) Close() {
+	C.cass_future_free(future.cptr)
+	future.cptr = nil
 }
 
-func (cluster *Cluster) SetPort(port int64) {
-	port_cint := C.int(port)
-	C.cass_cluster_set_port(cluster.cptr, port_cint)
+type Result struct {
+	iter *C.struct_CassIterator_
+	cptr *C.struct_CassResult_
 }
 
-func (cluster *Cluster) SessionConnect(session *Session) *Future {
-	future := new(Future)
-	future.cptr = C.cass_session_connect(session.cptr, cluster.cptr)
-	return future
-}
-
-func (session *Session) Execute(statement *Statement) *Future {
-	future := new(Future)
-	future.cptr = C.cass_session_execute(session.cptr, statement.cptr)
-	return future
+func (result *Result) Close() {
+	C.cass_result_free(result.cptr)
+	result.cptr = nil
 }
 
 func (result *Result) RowCount() uint64 {
@@ -276,15 +140,6 @@ func (result *Result) RowCount() uint64 {
 
 func (result *Result) ColumnCount() uint64 {
 	return uint64(C.cass_result_column_count(result.cptr))
-}
-
-func (result *Result) ColumnName(index uint64) string {
-	column_name := C.cass_result_column_name(result.cptr, C.cass_size_t(index))
-	return C.GoStringN(column_name.data, C.int(column_name.length))
-}
-
-func (result *Result) ColumnType(index uint64) int {
-	return int(C.cass_result_column_type(result.cptr, C.cass_size_t(index)))
 }
 
 func (result *Result) HasMorePages() bool {
@@ -309,26 +164,32 @@ func (result *Result) Scan(args ...interface{}) error {
 	var err C.CassError = C.CASS_OK
 
 	for i, v := range args {
-		value := C.cass_row_get_column(row, C.cass_size_t(i))
+		value := C.cass_row_get_column(row, C.size_t(i))
 
 		switch v := v.(type) {
 
 		case *string:
-			var str C.CassString
-			err = C.cass_value_get_string(value, &str)
-			if err != C.CASS_OK {
+			var str *C.char
+			var sizeT C.size_t
+
+			if err := C.cass_value_get_string(value, &str, &sizeT); err != C.CASS_OK {
 				return errors.New(C.GoString(C.cass_error_desc(err)))
 			}
-			*v = C.GoStringN(str.data, C.int(str.length))
-
-		case *[]byte:
-			var b C.CassBytes
-			err = C.cass_value_get_bytes(value, &b)
-			if err != C.CASS_OK {
-				return errors.New(C.GoString(C.cass_error_desc(err)))
-			}
-			*v = C.GoBytes(unsafe.Pointer(b.data), C.int(b.size))
-
+			*v = C.GoStringN(str, C.int(sizeT))
+		//case *[]byte:
+		////var b C.CassBytes
+		////err = C.cass_value_get_bytes(value, &b)
+		////if err != C.CASS_OK {
+		////return errors.New(C.GoString(C.cass_error_desc(err)))
+		////}
+		////v = C.GoBytes(unsafe.Pointer(b.data), C.int(b.size))
+		//var b C.cass_byte_t
+		//var size C.size_t
+		//err = C.cass_value_get_bytes(value, &b, &size)
+		//if err != C.CASS_OK {
+		//return errors.New(C.GoString(C.cass_error_desc(err)))
+		//}
+		//*v = C.GoBytes(unsafe.Pointer(b), C.int(size))
 		case *int32:
 			var i32 C.cass_int32_t
 			err = C.cass_value_get_int32(value, &i32)
@@ -376,3 +237,4 @@ func (result *Result) Scan(args ...interface{}) error {
 
 	return nil
 }
+

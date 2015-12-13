@@ -3,16 +3,41 @@ package main
 import (
 	"fmt"
 	"golang-driver/cassandra"
+	"time"
 )
 
 func main() {
-	cluster := cassandra.NewCluster()
-	cluster.SetContactPoints("cassandra")
-	defer cluster.Finalize()
+	cluster := cassandra.NewCluster("127.0.0.1")
+	//cluster.SetContactPoints("cassandra")
+	defer cluster.Close()
 
-	session := cassandra.NewSession()
-	defer session.Finalize()
+	session, err := cluster.Connect()
+	if err != nil {
+		fmt.Printf("ERROR connecting: %s\r\n", err.Error())
+		return
+	}
+	defer session.Close()
+	fmt.Printf("CONNECTED\r\n")
+	time.Sleep(5 * time.Second)
 
+	result, err := session.Execute("select keyspace_name from system.schema_keyspaces")
+	if err != nil {
+		fmt.Printf("ERROR Execute: %s\r\n", err.Error())
+		return
+	}
+	defer result.Close()
+
+	fmt.Printf("Clusters:\r\n")
+	for result.Next() {
+		var clusterName string
+		if err := result.Scan(&clusterName); err != nil {
+			fmt.Printf("Row error: %s\n", err.Error())
+			continue
+		}
+		fmt.Printf("%s\n", clusterName)
+	}
+	session.Execute("select * from system.schema_keyspaces where keyspaces_name = ?", "test")
+/*
 	sessfuture := cluster.SessionConnect(session)
 	sessfuture.Wait()
 	defer sessfuture.Finalize()
@@ -25,14 +50,6 @@ func main() {
 	defer stmtfuture.Finalize()
 
 	result := stmtfuture.Result()
-	defer result.Finalize()
-
-	fmt.Printf("Clusters:\r\n")
-	for result.Next() {
-		var clusterName string
-		result.Scan(&clusterName)
-		fmt.Printf("%s\n", clusterName)
-	}
-
+*/
 	fmt.Printf("DONE.\r\n")
 }
