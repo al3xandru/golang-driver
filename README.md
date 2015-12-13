@@ -10,9 +10,9 @@ on the work of Matt Stump's
 
 ### Build
 
-1. Build and install the DataStax [C/C++ driver](https://github.com/datastax/cpp-driver)
-1. Install `go get github.com/al3xnadru/golang-driver/cassandra`
-1. Run the example `go run $GOPATH/src/github.com/mstump/golang-driver/examples/basic.go`
+1. [Build](http://datastax.github.io/cpp-driver/topics/building/) and install the DataStax [C/C++ driver](https://github.com/datastax/cpp-driver)
+2. Install `go get github.com/al3xandru/golang-driver/cassandra`
+3. Run the example `go run $GOPATH/src/github.com/al3xandru/golang-driver/examples/basic.go`
 
 ### Example Usage
 
