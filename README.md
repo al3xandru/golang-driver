@@ -56,8 +56,8 @@ func main() {
 
 ### To do
 
-* [X] Cassandra `tinyint` (`int8`) and `smallint` (`int16`)
-* [X] Date time types
+* [X] Support for Cassandra 2.2 `tinyint` (`int8`) and `smallint` (`int16`) ([CASSANDRA-8951](https://issues.apache.org/jira/browse/CASSANDRA-8951)
+* [X] Support for Cassandra 2.2 date/time types ([CASSANDRA-7523](https://issues.apache.org/jira/browse/CASSANDRA-7523))
 * [X] Binding values to statements
 * [ ] Prepared statements
 * [ ] Missing C* types: `inet`, `decimal`, `binary`, `uuid`, `timeuuid`
