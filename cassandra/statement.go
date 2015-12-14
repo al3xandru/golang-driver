@@ -7,6 +7,7 @@ package cassandra
 import "C"
 import (
 	"errors"
+	"net"
 	"unsafe"
 )
 
@@ -57,6 +58,17 @@ func (stmt *Statement) bind(args ...interface{}) error {
 			cStr := C.CString(v)
 			defer C.free(unsafe.Pointer(cStr))
 			cerr = C.cass_statement_bind_string(stmt.cptr, C.size_t(i), cStr)
+		case []byte:
+			cerr = C.cass_statement_bind_bytes(stmt.cptr, C.size_t(i),
+				(*C.cass_byte_t)(unsafe.Pointer(&v)), C.size_t(len(v)))
+		case net.IP:
+			b := []byte(v)
+			var cInet C.struct_CassInet_
+			cInet.address_length = C.cass_uint8_t(len(b))
+			for j, _ := range b {
+				cInet.address[j] = C.cass_uint8_t(b[j])
+			}
+			cerr = C.cass_statement_bind_inet(stmt.cptr, C.size_t(i), cInet)
 		}
 	}
 	if cerr != C.CASS_OK {

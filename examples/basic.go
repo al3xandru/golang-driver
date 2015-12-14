@@ -87,6 +87,9 @@ func ExampleByteTypes(session *cassandra.Session) {
 		fmt.Printf("Blob: %v\n", blob)
 		fmt.Printf("IP  : %s (%v)\n", inet.String(), inet)
 	}
+
+	session.Execute("insert into golang.typesb (id, b, i) values (?, ?, ?)",
+		int32(3), []byte("cafe"), net.ParseIP("4.4.4.4"))
 }
 
 // CREATE TABLE IF NOT EXISTS typestime (
