@@ -64,9 +64,11 @@ func (session *Session) Execute(query string, args ...interface{}) (*Result, err
 	defer stmt.Close()
 
 	stmt.bind(args...)
-	future := async(func() *C.struct_CassFuture_ {
-		return C.cass_session_execute(session.cptr, stmt.cptr)
-	})
+	return session.Exec(stmt)
+}
+
+func (session *Session) Exec(stmt *Statement) (*Result, error) {
+	future := session.ExecAsync(stmt)
 	defer future.Close()
 
 	if err := future.Error(); err != nil {
@@ -77,15 +79,45 @@ func (session *Session) Execute(query string, args ...interface{}) (*Result, err
 	return future.Result(), nil
 }
 
+func (session *Session) ExecAsync(stmt *Statement) *Future {
+	return async(func() *C.struct_CassFuture_ {
+		return C.cass_session_execute(session.cptr, stmt.cptr)
+	})
+}
+
 func (session *Session) Prepare(query string) (*PreparedStatement, error) {
-	return nil, nil
+	cQuery := C.CString(query)
+	defer C.free(unsafe.Pointer(cQuery))
+
+	future := async(func() *C.struct_CassFuture_ {
+		return C.cass_session_prepare(session.cptr, cQuery)
+	})
+	defer future.Close()
+
+	if err := future.Error(); err != nil {
+		return nil, err
+	}
+	future.Wait()
+
+	pstmt := new(PreparedStatement)
+	pstmt.cptr = C.cass_future_get_prepared(future.cptr)
+
+	return pstmt, nil
 }
 
 type PreparedStatement struct {
 	cptr *C.struct_CassPrepared_
 }
 
-func (pstmt *PreparedStatement) Bind(args ...interface{}) {
+func (pstmt *PreparedStatement) Close() {
+	C.cass_prepared_free(pstmt.cptr)
+	pstmt.cptr = nil
+}
+
+func (pstmt *PreparedStatement) Bind(args ...interface{}) (*Statement, error) {
+	stmt := newBoundStatement(pstmt)
+	err := stmt.bind(args...)
+	return stmt, err
 }
 
 type Future struct {
@@ -109,9 +141,9 @@ func (future *Future) Result() *Result {
 	return result
 }
 
-func (future *Future) Ready() bool {
-	return C.cass_future_ready(future.cptr) == C.cass_true
-}
+// func (future *Future) Ready() bool {
+// 	return C.cass_future_ready(future.cptr) == C.cass_true
+// }
 
 func (future *Future) Wait() {
 	C.cass_future_wait(future.cptr)
@@ -136,17 +168,17 @@ func (result *Result) Close() {
 	result.cptr = nil
 }
 
-func (result *Result) RowCount() uint64 {
-	return uint64(C.cass_result_row_count(result.cptr))
-}
+// func (result *Result) RowCount() uint64 {
+// 	return uint64(C.cass_result_row_count(result.cptr))
+// }
 
 func (result *Result) ColumnCount() uint64 {
 	return uint64(C.cass_result_column_count(result.cptr))
 }
 
-func (result *Result) HasMorePages() bool {
-	return C.cass_result_has_more_pages(result.cptr) != 0
-}
+// func (result *Result) HasMorePages() bool {
+// 	return C.cass_result_has_more_pages(result.cptr) != 0
+// }
 
 func (result *Result) Next() bool {
 	if result.iter == nil {

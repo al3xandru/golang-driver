@@ -21,9 +21,10 @@ func main() {
 	fmt.Printf("CONNECTED\r\n")
 	time.Sleep(3 * time.Second)
 
-	ExampleByteTypes(session)
+	// ExampleByteTypes(session)
 	// ExampleSimpleQuery(session)
 	// ExampleParameterizedQuery(session)
+	ExamplePreparedStatement(session)
 	// ExampleTimeTypes(session)
 	fmt.Printf("DONE.\r\n")
 }
@@ -34,6 +35,7 @@ func ExampleSimpleQuery(session *cassandra.Session) {
 		fmt.Printf("Error: %s\n", err.Error())
 		return
 	}
+	defer result.Close()
 
 	fmt.Printf("Keyspaces:\n")
 	for result.Next() {
@@ -52,6 +54,7 @@ func ExampleParameterizedQuery(session *cassandra.Session) {
 		fmt.Printf("Error: %s\n", err.Error())
 		return
 	}
+	defer result.Close()
 
 	fmt.Printf("Keyspaces:\n")
 	for result.Next() {
@@ -61,6 +64,42 @@ func ExampleParameterizedQuery(session *cassandra.Session) {
 			continue
 		}
 		fmt.Printf("%s\n", ks)
+	}
+}
+
+func ExamplePreparedStatement(session *cassandra.Session) {
+	pStmt, err := session.Prepare("select columnfamily_name from system.schema_columnfamilies where keyspace_name = ?")
+	if err != nil {
+		fmt.Printf("Prepared statement error: %s\n", err.Error())
+		return
+	}
+	defer pStmt.Close()
+
+	keyspaces := []string{"system", "system_auth"}
+	for _, k := range keyspaces {
+		stmt, err := pStmt.Bind(k)
+		if err != nil {
+			fmt.Printf("Binding error: %s\n", err.Error())
+			continue
+		}
+		defer stmt.Close()
+
+		results, err := session.Exec(stmt)
+		if err != nil {
+			fmt.Printf("Exec error: %s\n", err.Error())
+			continue
+		}
+		defer results.Close()
+
+		fmt.Printf("Tables in keyspace %s:\n", k)
+		for results.Next() {
+			var tableName string
+			if err := results.Scan(&tableName); err != nil {
+				fmt.Printf("Row error: %s\n", err.Error())
+				continue
+			}
+			fmt.Printf("\t%s\n", tableName)
+		}
 	}
 }
 

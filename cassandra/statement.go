@@ -86,3 +86,10 @@ func newSimpleStatement(query string, paramLen int) *Statement {
 
 	return stmt
 }
+
+func newBoundStatement(pstmt *PreparedStatement) *Statement {
+	stmt := new(Statement)
+	stmt.cptr = C.cass_prepared_bind(pstmt.cptr)
+
+	return stmt
+}

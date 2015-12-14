@@ -60,10 +60,11 @@ func main() {
 * [X] Support for Cassandra 2.2 date/time types ([CASSANDRA-7523](https://issues.apache.org/jira/browse/CASSANDRA-7523))
 * [X] Binding values to statements
 * [X] Read/Write Cassandra `blob` (`[]byte`) and `inet` (`net.IP`)
-* [ ] Prepared statements
-* [ ] Missing C* types: `inet`, `decimal`, `binary`, `uuid`, `timeuuid`
+* [X] Prepared statements
+* [ ] Missing C* types: `decimal`, `uuid`, `timeuuid`
 * [ ] Async API
 * [ ] Advanced cluster configuration
 * [ ] Support for collections
 * [ ] Support for tuples
 * [ ] Support for UDTs
+* [ ] Named parameters
