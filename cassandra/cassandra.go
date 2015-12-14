@@ -5,7 +5,10 @@ package cassandra
 // #include <stdlib.h>
 // #include <cassandra.h>
 import "C"
-import "unsafe"
+import (
+	"net"
+	"unsafe"
+)
 import (
 	"errors"
 	"fmt"
@@ -255,6 +258,27 @@ func (result *Result) Scan(args ...interface{}) error {
 				return newError(err)
 			}
 			*v = Timestamp(i64)
+
+		case *[]byte:
+			var b *C.cass_byte_t
+			var sizeT C.size_t
+			if err := C.cass_value_get_bytes(value, &b, &sizeT); err != C.CASS_OK {
+				return newError(err)
+			}
+			*v = C.GoBytes(unsafe.Pointer(b), C.int(sizeT))
+
+		case *net.IP:
+			var inet C.struct_CassInet_
+
+			if err := C.cass_value_get_inet(value, &inet); err != C.CASS_OK {
+				return newError(err)
+			}
+			size := int(inet.address_length)
+			ip := make([]byte, size)
+			for i := 0; i < size; i++ {
+				ip[i] = byte(inet.address[i])
+			}
+			*v = net.IP(ip)
 
 		default:
 			return errors.New("unsupported type in Scan: " + reflect.TypeOf(v).String())
