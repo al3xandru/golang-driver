@@ -20,10 +20,46 @@ func main() {
 	fmt.Printf("CONNECTED\r\n")
 	time.Sleep(5 * time.Second)
 
-	// result, err := session.Execute("select keyspace_name from system.schema_keyspaces")
+	ExampleSimpleQuery(session)
+	ExampleParameterizedQuery(session)
 	ExampleTimeTypes(session)
-	session.Execute("select * from system.schema_keyspaces where keyspaces_name = ?", "test")
 	fmt.Printf("DONE.\r\n")
+}
+
+func ExampleSimpleQuery(session *cassandra.Session) {
+	result, err := session.Execute("select keyspace_name from system.schema_keyspaces")
+	if err != nil {
+		fmt.Printf("Error: %s\n", err.Error())
+		return
+	}
+
+	fmt.Printf("Keyspaces:\n")
+	for result.Next() {
+		var ks string
+		if err := result.Scan(&ks); err != nil {
+			fmt.Printf("Row error: %s\n", err.Error())
+			continue
+		}
+		fmt.Printf("%s\n", ks)
+	}
+}
+
+func ExampleParameterizedQuery(session *cassandra.Session) {
+	result, err := session.Execute("select * from system.schema_keyspaces where keyspace_name = ?", "test")
+	if err != nil {
+		fmt.Printf("Error: %s\n", err.Error())
+		return
+	}
+
+	fmt.Printf("Keyspaces:\n")
+	for result.Next() {
+		var ks string
+		if err := result.Scan(&ks); err != nil {
+			fmt.Printf("Row error: %s\n", err.Error())
+			continue
+		}
+		fmt.Printf("%s\n", ks)
+	}
 }
 
 // CREATE TABLE IF NOT EXISTS typestime (
@@ -43,7 +79,6 @@ func ExampleTimeTypes(session *cassandra.Session) {
 	}
 	defer result.Close()
 
-	fmt.Printf("Clusters:\r\n")
 	for result.Next() {
 		var d cassandra.Date
 		var t cassandra.Time

@@ -5,23 +5,16 @@ package cassandra
 // #include <stdlib.h>
 // #include <cassandra.h>
 import "C"
+import "unsafe"
 import (
 	"errors"
 	"fmt"
 	"reflect"
 	"strings"
 )
-import "unsafe"
-
-//import "errors"
-//import "reflect"
 
 type Cluster struct {
 	cptr *C.struct_CassCluster_
-}
-
-type Session struct {
-	cptr *C.struct_CassSession_
 }
 
 func NewCluster(contactPoints ...string) *Cluster {
@@ -43,7 +36,7 @@ func (cluster *Cluster) Connect() (*Session, error) {
 	session := new(Session)
 	session.cptr = C.cass_session_new()
 
-	future := NewFuture(func() *C.struct_CassFuture_ {
+	future := async(func() *C.struct_CassFuture_ {
 		return C.cass_session_connect(session.cptr, cluster.cptr)
 	})
 	defer future.Close()
@@ -54,20 +47,22 @@ func (cluster *Cluster) Connect() (*Session, error) {
 	return session, nil
 }
 
+type Session struct {
+	cptr *C.struct_CassSession_
+}
+
 func (session *Session) Close() {
 	C.cass_session_free(session.cptr)
 	session.cptr = nil
 }
 
 func (session *Session) Execute(query string, args ...interface{}) (*Result, error) {
-	cQuery := C.CString(query)
-	defer C.free(unsafe.Pointer(cQuery))
+	stmt := newSimpleStatement(query, len(args))
+	defer stmt.Close()
 
-	stmt := C.cass_statement_new(cQuery, C.size_t(len(args)))
-	defer C.cass_statement_free(stmt)
-
-	future := NewFuture(func() *C.struct_CassFuture_ {
-		return C.cass_session_execute(session.cptr, stmt)
+	stmt.bind(args...)
+	future := async(func() *C.struct_CassFuture_ {
+		return C.cass_session_execute(session.cptr, stmt.cptr)
 	})
 	defer future.Close()
 
@@ -79,15 +74,19 @@ func (session *Session) Execute(query string, args ...interface{}) (*Result, err
 	return future.Result(), nil
 }
 
-type Future struct {
-	cptr *C.struct_CassFuture_
+func (session *Session) Prepare(query string) (*PreparedStatement, error) {
+	return nil, nil
 }
 
-type FutureFunc func() *C.struct_CassFuture_
+type PreparedStatement struct {
+	cptr *C.struct_CassPrepared_
+}
 
-func NewFuture(f FutureFunc) *Future {
-	ptrFuture := f()
-	return &Future{ptrFuture}
+func (pstmt *PreparedStatement) Bind(args ...interface{}) {
+}
+
+type Future struct {
+	cptr *C.struct_CassFuture_
 }
 
 func (future *Future) Error() error {
@@ -155,7 +154,7 @@ func (result *Result) Next() bool {
 
 func (result *Result) Scan(args ...interface{}) error {
 
-	if result.ColumnCount() != uint64(len(args)) {
+	if result.ColumnCount() > uint64(len(args)) {
 		errors.New("invalid argument count")
 	}
 
@@ -168,96 +167,83 @@ func (result *Result) Scan(args ...interface{}) error {
 
 		switch v := v.(type) {
 
-		case *string:
-			var str *C.char
-			var sizeT C.size_t
-
-			if err := C.cass_value_get_string(value, &str, &sizeT); err != C.CASS_OK {
-				return errors.New(C.GoString(C.cass_error_desc(err)))
+		case *bool:
+			var b C.cass_bool_t
+			if err = C.cass_value_get_bool(value, &b); err != C.CASS_OK {
+				return newError(err)
 			}
-			*v = C.GoStringN(str, C.int(sizeT))
-		//case *[]byte:
-		////var b C.CassBytes
-		////err = C.cass_value_get_bytes(value, &b)
-		////if err != C.CASS_OK {
-		////return errors.New(C.GoString(C.cass_error_desc(err)))
-		////}
-		////v = C.GoBytes(unsafe.Pointer(b.data), C.int(b.size))
-		//var b C.cass_byte_t
-		//var size C.size_t
-		//err = C.cass_value_get_bytes(value, &b, &size)
-		//if err != C.CASS_OK {
-		//return errors.New(C.GoString(C.cass_error_desc(err)))
-		//}
-		//*v = C.GoBytes(unsafe.Pointer(b), C.int(size))
+			*v = bool(b != 0)
+
 		case *int8: // tinyint
 			var i8 C.cass_int8_t
 			if err = C.cass_value_get_int8(value, &i8); err != C.CASS_OK {
-				return errors.New(C.GoString(C.cass_error_desc(err)))
+				return newError(err)
 			}
 			*v = int8(i8)
+
 		case *int16: // smallint
 			var i16 C.cass_int16_t
 			if err = C.cass_value_get_int16(value, &i16); err != C.CASS_OK {
-				return errors.New(C.GoString(C.cass_error_desc(err)))
+				return newError(err)
 			}
 			*v = int16(i16)
+
 		case *int32:
 			var i32 C.cass_int32_t
-			err = C.cass_value_get_int32(value, &i32)
-			if err != C.CASS_OK {
-				return errors.New(C.GoString(C.cass_error_desc(err)))
+			if err = C.cass_value_get_int32(value, &i32); err != C.CASS_OK {
+				return newError(err)
 			}
 			*v = int32(i32)
+
 		case *uint32:
 			var u32 C.cass_uint32_t
 			if err = C.cass_value_get_uint32(value, &u32); err != C.CASS_OK {
-				return errors.New(C.GoString(C.cass_error_desc(err)))
+				return newError(err)
 			}
 			*v = uint32(u32)
+
 		case *int64:
 			var i64 C.cass_int64_t
-			err = C.cass_value_get_int64(value, &i64)
-			if err != C.CASS_OK {
-				return errors.New(C.GoString(C.cass_error_desc(err)))
+			if err = C.cass_value_get_int64(value, &i64); err != C.CASS_OK {
+				return newError(err)
 			}
 			*v = int64(i64)
 
 		case *float32:
 			var f32 C.cass_float_t
-			err = C.cass_value_get_float(value, &f32)
-			if err != C.CASS_OK {
-				return errors.New(C.GoString(C.cass_error_desc(err)))
+			if err = C.cass_value_get_float(value, &f32); err != C.CASS_OK {
+				return newError(err)
 			}
 			*v = float32(f32)
 
 		case *float64:
 			var f64 C.cass_double_t
-			err = C.cass_value_get_double(value, &f64)
-			if err != C.CASS_OK {
-				return errors.New(C.GoString(C.cass_error_desc(err)))
+			if err = C.cass_value_get_double(value, &f64); err != C.CASS_OK {
+				return newError(err)
 			}
 			*v = float64(f64)
 
-		case *bool:
-			var b C.cass_bool_t
-			err = C.cass_value_get_bool(value, &b)
-			if err != C.CASS_OK {
-				return errors.New(C.GoString(C.cass_error_desc(err)))
+		case *string:
+			var str *C.char
+			var sizeT C.size_t
+
+			if err := C.cass_value_get_string(value, &str, &sizeT); err != C.CASS_OK {
+				return newError(err)
 			}
-			*v = bool(b != 0)
+			*v = C.GoStringN(str, C.int(sizeT))
+
 		case *Time:
 			var i64 C.cass_int64_t
 			err = C.cass_value_get_int64(value, &i64)
 			if err != C.CASS_OK {
-				return errors.New(C.GoString(C.cass_error_desc(err)))
+				return newError(err)
 			}
 			v.Nanos = int64(i64)
 
 		case *Date:
 			var u32 C.cass_uint32_t
 			if err = C.cass_value_get_uint32(value, &u32); err != C.CASS_OK {
-				return errors.New(C.GoString(C.cass_error_desc(err)))
+				return newError(err)
 			}
 
 			v.Days = uint32(u32)
@@ -266,7 +252,7 @@ func (result *Result) Scan(args ...interface{}) error {
 			var i64 C.cass_int64_t
 			err = C.cass_value_get_int64(value, &i64)
 			if err != C.CASS_OK {
-				return errors.New(C.GoString(C.cass_error_desc(err)))
+				return newError(err)
 			}
 			*v = Timestamp(i64)
 
@@ -276,4 +262,17 @@ func (result *Result) Scan(args ...interface{}) error {
 	}
 
 	return nil
+}
+
+func newError(err C.CassError) error {
+	return errors.New(C.GoString(C.cass_error_desc(err)))
+}
+
+type statement struct {
+	cptr *C.struct_CassStatement_
+}
+
+func async(f func() *C.struct_CassFuture_) *Future {
+	ptrFuture := f()
+	return &Future{ptrFuture}
 }

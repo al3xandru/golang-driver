@@ -58,8 +58,9 @@ func main() {
 
 * [X] Cassandra `tinyint` (`int8`) and `smallint` (`int16`)
 * [X] Date time types
-* [ ] Binding values to statements
+* [X] Binding values to statements
 * [ ] Prepared statements
+* [ ] Missing C* types: `inet`, `decimal`, `binary`, `uuid`, `timeuuid`
 * [ ] Async API
 * [ ] Advanced cluster configuration
 * [ ] Support for collections
