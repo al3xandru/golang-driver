@@ -54,6 +54,22 @@ func main() {
 }
 ```
 
+### What is supposed to work
+
+1. Connecting to a cluster (sort of minimal expectation), but missing all the advanced configuration
+   options.
+2. A range of basic Cassandra types, including also the new ones introduced in
+   version 2.2 (tinyint, smallint, date, time, timestamp). Missing all the
+   collection types and uuids.
+3. Executing simple statements:
+
+    ```
+    session.Execute("select * from table where pk = ?", pk_value)
+    ```
+4. Executing prepared statements
+
+_The list of remaining todos is currently longer than the above one._
+
 ### To do
 
 * [X] Support for Cassandra 2.2 `tinyint` (`int8`) and `smallint` (`int16`) ([CASSANDRA-8951](https://issues.apache.org/jira/browse/CASSANDRA-8951)
