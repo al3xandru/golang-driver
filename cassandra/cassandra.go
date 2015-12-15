@@ -271,25 +271,33 @@ func (result *Result) Scan(args ...interface{}) error {
 			var i64 C.cass_int64_t
 			err = C.cass_value_get_int64(value, &i64)
 			if err != C.CASS_OK {
-				return newError(err)
+				if err != C.CASS_ERROR_LIB_NULL_VALUE {
+					return newError(err)
+				}
+			} else {
+				v.Nanos = int64(i64)
 			}
-			v.Nanos = int64(i64)
 
 		case *Date:
 			var u32 C.cass_uint32_t
 			if err = C.cass_value_get_uint32(value, &u32); err != C.CASS_OK {
-				return newError(err)
+				if err != C.CASS_ERROR_LIB_NULL_VALUE {
+					return newError(err)
+				}
+			} else {
+				v.Days = uint32(u32)
 			}
-
-			v.Days = uint32(u32)
 
 		case *Timestamp:
 			var i64 C.cass_int64_t
 			err = C.cass_value_get_int64(value, &i64)
 			if err != C.CASS_OK {
-				return newError(err)
+				if err != C.CASS_ERROR_LIB_NULL_VALUE {
+					return newError(err)
+				}
+			} else {
+				*v = Timestamp(i64)
 			}
-			*v = Timestamp(i64)
 
 		case *[]byte:
 			var b *C.cass_byte_t
@@ -312,6 +320,22 @@ func (result *Result) Scan(args ...interface{}) error {
 			}
 			*v = net.IP(ip)
 
+		case *UUID:
+			var cUuid C.struct_CassUuid_
+
+			if err := C.cass_value_get_uuid(value, &cUuid); err != C.CASS_OK {
+				return newError(err)
+			}
+			buf := (*C.char)(C.malloc(37))
+			defer C.free(unsafe.Pointer(buf))
+			C.cass_uuid_string(cUuid, buf)
+
+			uuid := C.GoString(buf)
+			u, err := ParseUUID(uuid)
+			if err != nil {
+				return err
+			}
+			*v = u
 		default:
 			return errors.New("unsupported type in Scan: " + reflect.TypeOf(v).String())
 		}

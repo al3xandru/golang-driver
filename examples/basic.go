@@ -9,7 +9,6 @@ import (
 
 func main() {
 	cluster := cassandra.NewCluster("127.0.0.1")
-	//cluster.SetContactPoints("cassandra")
 	defer cluster.Close()
 
 	session, err := cluster.Connect()
@@ -21,15 +20,17 @@ func main() {
 	fmt.Printf("CONNECTED\r\n")
 	time.Sleep(3 * time.Second)
 
-	// ExampleByteTypes(session)
-	// ExampleSimpleQuery(session)
-	// ExampleParameterizedQuery(session)
+	ExampleSimpleQuery(session)
+	ExampleParameterizedQuery(session)
 	ExamplePreparedStatement(session)
-	// ExampleTimeTypes(session)
+	ExampleUUIDTypes(session)
+	ExampleTimeTypes(session)
+	ExampleByteTypes(session)
 	fmt.Printf("DONE.\r\n")
 }
 
 func ExampleSimpleQuery(session *cassandra.Session) {
+	fmt.Println("Simple query")
 	result, err := session.Execute("select keyspace_name from system.schema_keyspaces")
 	if err != nil {
 		fmt.Printf("Error: %s\n", err.Error())
@@ -49,6 +50,7 @@ func ExampleSimpleQuery(session *cassandra.Session) {
 }
 
 func ExampleParameterizedQuery(session *cassandra.Session) {
+	fmt.Println("Parameterized query")
 	result, err := session.Execute("select * from system.schema_keyspaces where keyspace_name = ?", "test")
 	if err != nil {
 		fmt.Printf("Error: %s\n", err.Error())
@@ -68,6 +70,7 @@ func ExampleParameterizedQuery(session *cassandra.Session) {
 }
 
 func ExamplePreparedStatement(session *cassandra.Session) {
+	fmt.Println("Prepared statement")
 	pStmt, err := session.Prepare("select columnfamily_name from system.schema_columnfamilies where keyspace_name = ?")
 	if err != nil {
 		fmt.Printf("Prepared statement error: %s\n", err.Error())
@@ -100,6 +103,25 @@ func ExamplePreparedStatement(session *cassandra.Session) {
 			}
 			fmt.Printf("\t%s\n", tableName)
 		}
+	}
+}
+
+func ExampleUUIDTypes(session *cassandra.Session) {
+	result, err := session.Execute("SELECT t, u FROM golang.typesuuid")
+	if err != nil {
+		fmt.Printf("Error: %s\n", err.Error())
+		return
+	}
+	fmt.Printf("UUIDs results:\n")
+	for result.Next() {
+		var timeUuid cassandra.UUID
+		var uuid cassandra.UUID
+		if err := result.Scan(&timeUuid, &uuid); err != nil {
+			fmt.Printf("Row error: %s\n", err.Error())
+			continue
+		}
+		fmt.Printf("TimeUUID: %s (Version: %d)\n", timeUuid.String(), timeUuid.Version())
+		fmt.Printf("UUID    : %s (Version: %d)\n", uuid.String(), uuid.Version())
 	}
 }
 
