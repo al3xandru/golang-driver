@@ -9,6 +9,10 @@ import (
 
 func main() {
 	cluster := cassandra.NewCluster("127.0.0.1")
+	cluster.SetRequestTimeout(10000)
+	opts := cassandra.NewConnectionOptions()
+	opts.ConnectionTimeout = 10000
+	cluster.SetConnectionOptions(opts)
 	defer cluster.Close()
 
 	session, err := cluster.Connect()

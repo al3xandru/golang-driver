@@ -60,7 +60,11 @@ func main() {
    options.
 2. A range of basic Cassandra types, including also the new ones introduced in
    version 2.2 (tinyint, smallint, date, time, timestamp). Missing all the
-   collection types and uuids.
+   collection types <del>and uuids</del>.
+
+   * There's basic support for UUID and TimeUUID, but it needs more testing and
+       validation of the API.
+
 3. Executing simple statements:
 
     ```
@@ -77,9 +81,10 @@ _The list of remaining todos is currently longer than the above one._
 * [X] Binding values to statements
 * [X] Read/Write Cassandra `blob` (`[]byte`) and `inet` (`net.IP`)
 * [X] Prepared statements
-* [ ] Missing C* types: `decimal`, `uuid`, `timeuuid`
+* [X] Basic support for `uuid`, `timeuuid`
+* [ ] Missing C* types: `decimal`
 * [ ] Async API
-* [ ] Advanced cluster configuration
+* [X] Advanced cluster configuration
 * [ ] Support for collections
 * [ ] Support for tuples
 * [ ] Support for UDTs

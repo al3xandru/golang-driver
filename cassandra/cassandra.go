@@ -13,42 +13,7 @@ import (
 	"errors"
 	"fmt"
 	"reflect"
-	"strings"
 )
-
-type Cluster struct {
-	cptr *C.struct_CassCluster_
-}
-
-func NewCluster(contactPoints ...string) *Cluster {
-	cluster := new(Cluster)
-	cluster.cptr = C.cass_cluster_new()
-	cContactPoints := C.CString(strings.Join(contactPoints, ","))
-	defer C.free(unsafe.Pointer(cContactPoints))
-	C.cass_cluster_set_contact_points(cluster.cptr, cContactPoints)
-
-	return cluster
-}
-
-func (cluster *Cluster) Close() {
-	C.cass_cluster_free(cluster.cptr)
-	cluster.cptr = nil
-}
-
-func (cluster *Cluster) Connect() (*Session, error) {
-	session := new(Session)
-	session.cptr = C.cass_session_new()
-
-	future := async(func() *C.struct_CassFuture_ {
-		return C.cass_session_connect(session.cptr, cluster.cptr)
-	})
-	defer future.Close()
-
-	if err := future.Error(); err != nil {
-		return nil, err
-	}
-	return session, nil
-}
 
 type Session struct {
 	cptr *C.struct_CassSession_
@@ -326,11 +291,12 @@ func (result *Result) Scan(args ...interface{}) error {
 			if err := C.cass_value_get_uuid(value, &cUuid); err != C.CASS_OK {
 				return newError(err)
 			}
-			buf := (*C.char)(C.malloc(37))
+			buf := (*C.char)(C.malloc(C.CASS_UUID_STRING_LENGTH))
 			defer C.free(unsafe.Pointer(buf))
-			C.cass_uuid_string(cUuid, buf)
 
+			C.cass_uuid_string(cUuid, buf)
 			uuid := C.GoString(buf)
+
 			u, err := ParseUUID(uuid)
 			if err != nil {
 				return err
