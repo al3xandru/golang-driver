@@ -16,7 +16,8 @@ import (
 )
 
 type Session struct {
-	cptr *C.struct_CassSession_
+	cptr    *C.struct_CassSession_
+	Cluster *Cluster
 }
 
 func (session *Session) Close() {
@@ -24,7 +25,7 @@ func (session *Session) Close() {
 	session.cptr = nil
 }
 
-func (session *Session) Execute(query string, args ...interface{}) (*Result, error) {
+func (session *Session) Execute(query string, args ...interface{}) (*Rows, error) {
 	stmt := newSimpleStatement(query, len(args))
 	defer stmt.Close()
 
@@ -32,7 +33,7 @@ func (session *Session) Execute(query string, args ...interface{}) (*Result, err
 	return session.Exec(stmt)
 }
 
-func (session *Session) Exec(stmt *Statement) (*Result, error) {
+func (session *Session) Exec(stmt *Statement) (*Rows, error) {
 	future := session.ExecAsync(stmt)
 	defer future.Close()
 
@@ -100,8 +101,8 @@ func (future *Future) Error() error {
 	return errors.New(C.GoStringN(msg, C.int(sizet)))
 }
 
-func (future *Future) Result() *Result {
-	result := new(Result)
+func (future *Future) Result() *Rows {
+	result := new(Rows)
 	result.cptr = C.cass_future_get_result(future.cptr)
 	return result
 }
@@ -123,39 +124,43 @@ func (future *Future) Close() {
 	future.cptr = nil
 }
 
-type Result struct {
+type Rows struct {
 	iter *C.struct_CassIterator_
 	cptr *C.struct_CassResult_
+	err  error
 }
 
-func (result *Result) Close() {
+func (r *Rows) Err() error {
+	return r.err
+}
+
+func (result *Rows) Close() {
 	C.cass_result_free(result.cptr)
 	result.cptr = nil
 }
 
-// func (result *Result) RowCount() uint64 {
+// func (result *Rows) RowCount() uint64 {
 // 	return uint64(C.cass_result_row_count(result.cptr))
 // }
 
-func (result *Result) ColumnCount() uint64 {
+func (result *Rows) ColumnCount() uint64 {
 	return uint64(C.cass_result_column_count(result.cptr))
 }
 
-// func (result *Result) HasMorePages() bool {
+// func (result *Rows) HasMorePages() bool {
 // 	return C.cass_result_has_more_pages(result.cptr) != 0
 // }
 
-func (result *Result) Next() bool {
+func (result *Rows) Next() bool {
 	if result.iter == nil {
 		result.iter = C.cass_iterator_from_result(result.cptr)
 	}
 	return C.cass_iterator_next(result.iter) != 0
 }
 
-func (result *Result) Scan(args ...interface{}) error {
-
+func (result *Rows) Scan(args ...interface{}) error {
 	if result.ColumnCount() > uint64(len(args)) {
-		errors.New("invalid argument count")
+		return errors.New("invalid argument count")
 	}
 
 	row := C.cass_iterator_get_row(result.iter)

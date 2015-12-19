@@ -168,6 +168,7 @@ func (cluster *Cluster) Close() {
 func (cluster *Cluster) Connect() (*Session, error) {
 	session := new(Session)
 	session.cptr = C.cass_session_new()
+	session.Cluster = cluster
 
 	future := async(func() *C.struct_CassFuture_ {
 		return C.cass_session_connect(session.cptr, cluster.cptr)
