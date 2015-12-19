@@ -7,6 +7,7 @@ package cassandra
 import "C"
 import (
 	"strings"
+	"time"
 	"unsafe"
 )
 
@@ -43,13 +44,14 @@ func (cluster *Cluster) SetUseSchemaMetadata(flag bool) {
 	}
 }
 
-func (cluster *Cluster) SetConnectionTimeout(timeout uint) {
-	C.cass_cluster_set_connect_timeout(cluster.cptr, C.uint(timeout))
+func (cluster *Cluster) SetConnectionTimeout(timeout time.Duration) {
+	C.cass_cluster_set_connect_timeout(cluster.cptr,
+		C.uint(timeout.Seconds()*1000))
 }
 
-func (cluster *Cluster) SetRequestTimeout(timeout uint) {
+func (cluster *Cluster) SetRequestTimeout(timeout time.Duration) {
 	C.cass_cluster_set_request_timeout(cluster.cptr,
-		C.uint(timeout))
+		C.uint(timeout.Seconds()*1000))
 }
 
 func (cluster *Cluster) SetConnectionOptions(opts connectionOptions) error {
@@ -91,6 +93,10 @@ func (cluster *Cluster) SetConnectionOptions(opts connectionOptions) error {
 	if opts.MaxConcurrentConnectionCreation != unsetValue {
 		cerr = C.cass_cluster_set_max_concurrent_creation(cluster.cptr,
 			C.uint(opts.MaxConcurrentConnectionCreation))
+	}
+	if opts.MaxConcurrentRequests != unsetValue {
+		cerr = C.cass_cluster_set_max_concurrent_requests_threshold(cluster.cptr,
+			C.uint(opts.MaxConcurrentRequests))
 	}
 	if opts.ParallelIOThreads != unsetValue {
 		cerr = C.cass_cluster_set_num_threads_io(cluster.cptr,
@@ -136,10 +142,6 @@ func (cluster *Cluster) SetRequestOptions(opts requestOptions) error {
 			C.uint(opts.RequestTimeout))
 	}
 	var cerr C.CassError = C.CASS_OK
-	if opts.MaxConcurrentRequests != unsetValue {
-		cerr = C.cass_cluster_set_max_concurrent_requests_threshold(cluster.cptr,
-			C.uint(opts.MaxConcurrentRequests))
-	}
 	if opts.MaxRequestsPerFlush != unsetValue {
 		cerr = C.cass_cluster_set_max_requests_per_flush(cluster.cptr,
 			C.uint(opts.MaxRequestsPerFlush))
@@ -186,6 +188,7 @@ type connectionOptions struct {
 	CoreConnectionsPerHost          uint
 	MaxConnectionsPerHost           uint
 	MaxConcurrentConnectionCreation uint
+	MaxConcurrentRequests           uint
 	TcpKeepAlive                    bool
 	TcpKeepAliveDelay               uint
 	TcpNoDelay                      bool
@@ -200,7 +203,7 @@ const unsetValue = ^uint(0)
 // rest will use the defaults.
 func NewConnectionOptions() connectionOptions {
 	return connectionOptions{unsetValue, unsetValue, unsetValue, unsetValue,
-		unsetValue, unsetValue, unsetValue,
+		unsetValue, unsetValue, unsetValue, unsetValue,
 		false, unsetValue, false,
 		unsetValue,
 		unsetValue, unsetValue}
@@ -208,15 +211,13 @@ func NewConnectionOptions() connectionOptions {
 
 type requestOptions struct {
 	RequestTimeout               uint
-	MaxConcurrentRequests        uint
 	MaxRequestsPerFlush          uint
 	PendingRequestsHighWatermark uint
 	PendingRequestsLowWatermark  uint
 }
 
 func NewRequestOptions() requestOptions {
-	return requestOptions{unsetValue, unsetValue, unsetValue,
-		unsetValue, unsetValue}
+	return requestOptions{unsetValue, unsetValue, unsetValue, unsetValue}
 }
 
 type queueOptions struct {
