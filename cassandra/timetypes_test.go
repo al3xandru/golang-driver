@@ -2,7 +2,10 @@ package cassandra_test
 
 import (
 	"golang-driver/cassandra"
+	"golang-driver/cassandra/test"
+	"math"
 	"testing"
+	"time"
 )
 
 func TestTime(t *testing.T) {
@@ -36,3 +39,85 @@ func TestTime(t *testing.T) {
 		t.Errorf("Nanos: 345678900 != %d", t2.Nanoseconds())
 	}
 }
+
+func TestTimestamp(t *testing.T) {
+	ts1 := &cassandra.Timestamp{1450606299}
+	ts2 := cassandra.NewTimestamp(time.Date(2015, 12, 20, 10, 11, 39, 0, time.UTC))
+
+	if !ts1.Time().Equal(ts2.Time()) {
+		t.Fatalf("%d != %d (%s != %s)", ts1.SecondsSinceEpoch, ts2.SecondsSinceEpoch,
+			ts1.Time().String(), ts2.Time().String())
+	}
+}
+
+func TestDate(t *testing.T) {
+	d1 := cassandra.NewDate(2015, 12, 20)
+	tDay := time.Date(2015, 12, 20, 0, 0, 0, 0, time.UTC)
+
+	if !tDay.Equal(d1.Time()) {
+		t.Errorf("%s != %s", tDay, d1.Time())
+	}
+
+	d2 := cassandra.NewDate(1970, 1, 1)
+	if float64(d2.Days) != math.Pow(2, 31) {
+		t.Errorf("Center %d != %d", math.Pow(2, 31), d2.Days)
+	}
+
+	d2, err := cassandra.ParseDate("2015-12-20")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !d1.Time().Equal(d2.Time()) {
+		t.Errorf("%d = %d (%s != %s)", d1.Days, d2.Days,
+			d1.Time(), d2.Time())
+	}
+}
+
+func TestTimeTypes(t *testing.T) {
+	session := test.GetSession()
+	defer test.Shutdown()
+
+	if err := test.Setup(timetypesSetup); err != nil {
+		t.Log("Unexpected error while setup. You might need to clean up manually golang_driver keyspace")
+		t.Fatal(err)
+	}
+	defer test.TearDown(timetypesCleanup)
+	rows, err := session.Execute("SELECT td, tt, ts FROM golang_driver.timetypes")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer rows.Close()
+
+	expectedTime, _ := cassandra.NewTime(13, 29, 7, 234000000)
+	var tt cassandra.Time
+	var ts cassandra.Timestamp
+	var td cassandra.Date
+
+	if rows.Next() {
+		if err := rows.Scan(&td, &tt, &ts); err != nil {
+			t.Fatal(err)
+		}
+		if td.String() != "2015-08-23" {
+			t.Errorf("Date '2015-08-23' != %s", td.String())
+		}
+		if tt != expectedTime {
+			t.Errorf("%02s:%02s:%02s.%d", tt.Hours(), tt.Minutes(), tt.Seconds(), tt.Nanoseconds())
+		}
+		if ts.SecondsSinceEpoch != 1450606299 {
+			t.Errorf("Timestamp 1450606299 != %d (%s)", ts.SecondsSinceEpoch, ts.Time())
+		}
+	}
+}
+
+var (
+	timetypesSetup = []string{
+		"CREATE KEYSPACE IF NOT EXISTS golang_driver WITH replication = {'class': 'SimpleStrategy', 'replication_factor': 1};",
+		`CREATE TABLE IF NOT EXISTS golang_driver.timetypes(id int PRIMARY KEY, 
+		td date, tt time, ts timestamp)`,
+		"INSERT INTO golang_driver.timetypes (id, td, tt, ts) VALUES (1, '2015-08-23', '13:29:07.234', 1450606299)",
+	}
+
+	timetypesCleanup = []string{
+		"DROP TABLE golang_driver.timetypes",
+	}
+)

@@ -271,7 +271,7 @@ func (result *Rows) Scan(args ...interface{}) error {
 		case *Time:
 			var i64 C.cass_int64_t
 			retc = C.cass_value_get_int64(value, &i64)
-			if retc != C.CASS_OK {
+			if retc == C.CASS_OK {
 				*v = Time(i64)
 			} else if retc != C.CASS_ERROR_LIB_NULL_VALUE {
 				return newColumnError(result, i, retc, v)
@@ -285,13 +285,12 @@ func (result *Rows) Scan(args ...interface{}) error {
 			} else if retc != C.CASS_ERROR_LIB_NULL_VALUE {
 				return newColumnError(result, i, retc, v)
 			}
-			v = nil
 
 		case *Timestamp:
 			var i64 C.cass_int64_t
 			retc = C.cass_value_get_int64(value, &i64)
-			if retc != C.CASS_OK {
-				*v = Timestamp(i64)
+			if retc == C.CASS_OK {
+				v.SecondsSinceEpoch = int64(i64)
 			} else if retc != C.CASS_ERROR_LIB_NULL_VALUE {
 				return newColumnError(result, i, retc, v)
 			}

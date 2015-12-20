@@ -53,7 +53,7 @@ func (stmt *Statement) bind(args ...interface{}) error {
 		case Time:
 			cerr = C.cass_statement_bind_int64(stmt.cptr, C.size_t(i), C.cass_int64_t(v))
 		case Timestamp:
-			cerr = C.cass_statement_bind_int64(stmt.cptr, C.size_t(i), C.cass_int64_t(v))
+			cerr = C.cass_statement_bind_int64(stmt.cptr, C.size_t(i), C.cass_int64_t(v.SecondsSinceEpoch))
 		case string:
 			cStr := C.CString(v)
 			defer C.free(unsafe.Pointer(cStr))

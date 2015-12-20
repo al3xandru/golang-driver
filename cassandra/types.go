@@ -16,7 +16,17 @@ import (
 
 // Cassandra `timestamp` represents a date plus time,
 // encoded as 8 bytes since epoch
-type Timestamp int64
+type Timestamp struct {
+	SecondsSinceEpoch int64
+}
+
+func (t *Timestamp) Time() time.Time {
+	return Epoch.Add(time.Duration(t.SecondsSinceEpoch) * time.Second)
+}
+
+func NewTimestamp(t time.Time) *Timestamp {
+	return &Timestamp{int64(t.Sub(Epoch).Seconds())}
+}
 
 // Cassandra Date is a 32-bit unsigned integer representing
 // the number of days with Epoch (1970-1-1) at the center of the range
@@ -26,8 +36,16 @@ type Date struct {
 
 // Only the year, month, day part are set in the returned time.Time
 func (d *Date) Time() time.Time {
-	var v int64 = int64(d.Days) - math.MaxInt32
+	var v int64 = int64(d.Days) - math.MaxInt32 - 1
 	return Epoch.Add(time.Duration(v*24) * time.Hour)
+}
+
+func ParseDate(s string) (*Date, error) {
+	t, err := time.Parse("2006-01-02", s)
+	if err != nil {
+		return nil, err
+	}
+	return NewDate(t.Year(), t.Month(), t.Day()), nil
 }
 
 func (d *Date) String() string {

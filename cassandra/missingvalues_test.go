@@ -16,7 +16,7 @@ func TestMissingValues(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer test.TearDown(alltypesCleanup)
-	rows, err := session.Execute("SELECT a, txt, vchr, bol, bigi, ii, smalli, tinyi, dbl, flt, ip, tuid, uid, blb, tm FROM golang_driver.alltypes")
+	rows, err := session.Execute("SELECT a, txt, vchr, bol, bigi, ii, smalli, tinyi, dbl, flt, ip, tuid, uid, blb, tm, ts, td FROM golang_driver.alltypes")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -35,11 +35,13 @@ func TestMissingValues(t *testing.T) {
 	var tu cassandra.UUID
 	var uu cassandra.UUID
 	var tm cassandra.Time
+	var ts cassandra.Timestamp
+	var td cassandra.Date
 
 	var empty [16]byte
 
 	if rows.Next() {
-		if err := rows.Scan(&asc, &txt, &vchar, &bo, &bi, &ii, &si, &ti, &dbl, &flt, &ip, &tu, &uu, &bl, &tm); err != nil {
+		if err := rows.Scan(&asc, &txt, &vchar, &bo, &bi, &ii, &si, &ti, &dbl, &flt, &ip, &tu, &uu, &bl, &tm, &ts, &td); err != nil {
 			t.Fatal(err)
 		}
 		if asc != "" {
@@ -96,9 +98,12 @@ func TestMissingValues(t *testing.T) {
 		if tm != 0 {
 			t.Errorf("default time should be 0 != %d", tm)
 		}
-		// if ts != 0 {
-		// 	t.Errorf("default timestamp should be 0 != %d", ts)
-		// }
+		if ts.SecondsSinceEpoch != 0 {
+			t.Errorf("default timestamp should be 0 != %d", ts.SecondsSinceEpoch)
+		}
+		if td.Days != 0 {
+			t.Errorf("default date should be 0 != %d", td.Days)
+		}
 	} else {
 		t.Fatal("There must be 1 row in golang_driver.alltypes")
 	}
