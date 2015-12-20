@@ -82,9 +82,9 @@ _The list of remaining todos is currently longer than the above one._
 * [X] Read/Write Cassandra `blob` (`[]byte`) and `inet` (`net.IP`)
 * [X] Prepared statements
 * [X] Basic support for `uuid`, `timeuuid`
+* [X] Advanced cluster configuration
 * [ ] Missing C* types: `decimal`, `varint`
 * [ ] Async API
-* [X] Advanced cluster configuration
 * [ ] Support for collections
 * [ ] Support for tuples
 * [ ] Support for UDTs
