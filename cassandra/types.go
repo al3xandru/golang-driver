@@ -1,5 +1,10 @@
 package cassandra
 
+// #cgo LDFLAGS: -L/usr/local/lib -lcassandra
+// #cgo CFLAGS: -I/usr/local/include
+// #include <stdlib.h>
+// #include <cassandra.h>
+import "C"
 import (
 	"encoding/hex"
 	"fmt"
@@ -48,6 +53,12 @@ type Time struct {
 func (t *Time) Duration() time.Duration {
 	return time.Duration(t.Nanos) * time.Nanosecond
 }
+
+// func NewTime(hours, minutes, seconds, millis uint) *Time {
+// 	var nanos int64 = hours * Duration.Hour * Duration.Minute * Duration.Second * Duration.Millisecond * Duration.Microsecond +
+// 		minutes * Duration.Minute * Duration.Second * Duration.Millisecond * Duration.Microsecond +
+// 		seconds * Duration.Millisecond * Duration.Microsecond
+// }
 
 // Used to represent both a Cassandra `uuid` (UUID v4)
 // and `timeuuid` (UUID v1).

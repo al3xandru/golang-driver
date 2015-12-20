@@ -23,6 +23,7 @@ type Session struct {
 func (session *Session) Close() {
 	C.cass_session_free(session.cptr)
 	session.cptr = nil
+	session.Cluster = nil
 }
 
 func (session *Session) Execute(query string, args ...interface{}) (*Rows, error) {
@@ -147,6 +148,20 @@ func (result *Rows) ColumnCount() uint64 {
 	return uint64(C.cass_result_column_count(result.cptr))
 }
 
+func (result *Rows) ColumnName(index int) string {
+	var cStr *C.char
+	var size C.size_t
+	retc := C.cass_result_column_name(result.cptr, C.size_t(index), &cStr, &size)
+	if retc == C.CASS_OK {
+		return C.GoStringN(cStr, C.int(size))
+	}
+	return "UNKNOWN"
+}
+
+func (result *Rows) ColumnType(index int) string {
+	return cassType(C.cass_result_column_type(result.cptr, C.size_t(index)))
+}
+
 // func (result *Rows) HasMorePages() bool {
 // 	return C.cass_result_has_more_pages(result.cptr) != 0
 // }
@@ -159,13 +174,13 @@ func (result *Rows) Next() bool {
 }
 
 func (result *Rows) Scan(args ...interface{}) error {
-	if result.ColumnCount() > uint64(len(args)) {
+	if result.ColumnCount() < uint64(len(args)) {
 		return errors.New("invalid argument count")
 	}
 
 	row := C.cass_iterator_get_row(result.iter)
 
-	var err C.CassError = C.CASS_OK
+	var retc C.CassError = C.CASS_OK
 
 	for i, v := range args {
 		value := C.cass_row_get_column(row, C.size_t(i))
@@ -174,139 +189,158 @@ func (result *Rows) Scan(args ...interface{}) error {
 
 		case *bool:
 			var b C.cass_bool_t
-			if err = C.cass_value_get_bool(value, &b); err != C.CASS_OK {
-				return newError(err)
+			retc = C.cass_value_get_bool(value, &b)
+			if retc == C.CASS_OK {
+				*v = bool(b != 0)
+			} else if retc != C.CASS_ERROR_LIB_NULL_VALUE {
+				return newColumnError(result, i, retc, v)
 			}
-			*v = bool(b != 0)
 
 		case *int8: // tinyint
 			var i8 C.cass_int8_t
-			if err = C.cass_value_get_int8(value, &i8); err != C.CASS_OK {
-				return newError(err)
+			retc = C.cass_value_get_int8(value, &i8)
+			if retc == C.CASS_OK {
+				*v = int8(i8)
+			} else if retc != C.CASS_ERROR_LIB_NULL_VALUE {
+				return newColumnError(result, i, retc, v)
 			}
-			*v = int8(i8)
 
 		case *int16: // smallint
 			var i16 C.cass_int16_t
-			if err = C.cass_value_get_int16(value, &i16); err != C.CASS_OK {
-				return newError(err)
+			retc = C.cass_value_get_int16(value, &i16)
+			if retc == C.CASS_OK {
+				*v = int16(i16)
+			} else if retc != C.CASS_ERROR_LIB_NULL_VALUE {
+				return newColumnError(result, i, retc, v)
 			}
-			*v = int16(i16)
 
 		case *int32:
 			var i32 C.cass_int32_t
-			if err = C.cass_value_get_int32(value, &i32); err != C.CASS_OK {
-				return newError(err)
+			retc = C.cass_value_get_int32(value, &i32)
+			if retc == C.CASS_OK {
+				*v = int32(i32)
+			} else if retc != C.CASS_ERROR_LIB_NULL_VALUE {
+				return newColumnError(result, i, retc, v)
 			}
-			*v = int32(i32)
 
 		case *uint32:
 			var u32 C.cass_uint32_t
-			if err = C.cass_value_get_uint32(value, &u32); err != C.CASS_OK {
-				return newError(err)
+			if retc = C.cass_value_get_uint32(value, &u32); retc != C.CASS_OK {
+				return newColumnError(result, i, retc, v)
+				return newError(retc, i)
 			}
 			*v = uint32(u32)
 
 		case *int64:
 			var i64 C.cass_int64_t
-			if err = C.cass_value_get_int64(value, &i64); err != C.CASS_OK {
-				return newError(err)
+			retc = C.cass_value_get_int64(value, &i64)
+			if retc == C.CASS_OK {
+				*v = int64(i64)
+			} else if retc != C.CASS_ERROR_LIB_NULL_VALUE {
+				return newColumnError(result, i, retc, v)
 			}
-			*v = int64(i64)
 
 		case *float32:
 			var f32 C.cass_float_t
-			if err = C.cass_value_get_float(value, &f32); err != C.CASS_OK {
-				return newError(err)
+			retc = C.cass_value_get_float(value, &f32)
+			if retc == C.CASS_OK {
+				*v = float32(f32)
+			} else if retc != C.CASS_ERROR_LIB_NULL_VALUE {
+				return newColumnError(result, i, retc, v)
 			}
-			*v = float32(f32)
 
 		case *float64:
 			var f64 C.cass_double_t
-			if err = C.cass_value_get_double(value, &f64); err != C.CASS_OK {
-				return newError(err)
+			retc = C.cass_value_get_double(value, &f64)
+			if retc == C.CASS_OK {
+				*v = float64(f64)
+			} else if retc != C.CASS_ERROR_LIB_NULL_VALUE {
+				return newColumnError(result, i, retc, v)
 			}
-			*v = float64(f64)
 
 		case *string:
 			var str *C.char
-			var sizeT C.size_t
-
-			if err := C.cass_value_get_string(value, &str, &sizeT); err != C.CASS_OK {
-				return newError(err)
+			var size C.size_t
+			retc := C.cass_value_get_string(value, &str, &size)
+			if retc == C.CASS_OK {
+				*v = C.GoStringN(str, C.int(size))
+			} else if retc != C.CASS_ERROR_LIB_NULL_VALUE {
+				return newColumnError(result, i, retc, v)
 			}
-			*v = C.GoStringN(str, C.int(sizeT))
 
 		case *Time:
 			var i64 C.cass_int64_t
-			err = C.cass_value_get_int64(value, &i64)
-			if err != C.CASS_OK {
-				if err != C.CASS_ERROR_LIB_NULL_VALUE {
-					return newError(err)
-				}
-			} else {
+			retc = C.cass_value_get_int64(value, &i64)
+			if retc != C.CASS_OK {
 				v.Nanos = int64(i64)
+			} else if retc != C.CASS_ERROR_LIB_NULL_VALUE {
+				return newColumnError(result, i, retc, v)
 			}
 
 		case *Date:
 			var u32 C.cass_uint32_t
-			if err = C.cass_value_get_uint32(value, &u32); err != C.CASS_OK {
-				if err != C.CASS_ERROR_LIB_NULL_VALUE {
-					return newError(err)
-				}
-			} else {
+			retc = C.cass_value_get_uint32(value, &u32)
+			if retc == C.CASS_OK {
 				v.Days = uint32(u32)
+			} else if retc != C.CASS_ERROR_LIB_NULL_VALUE {
+				return newColumnError(result, i, retc, v)
 			}
+			v = nil
 
 		case *Timestamp:
 			var i64 C.cass_int64_t
-			err = C.cass_value_get_int64(value, &i64)
-			if err != C.CASS_OK {
-				if err != C.CASS_ERROR_LIB_NULL_VALUE {
-					return newError(err)
-				}
-			} else {
+			retc = C.cass_value_get_int64(value, &i64)
+			if retc != C.CASS_OK {
 				*v = Timestamp(i64)
+			} else if retc != C.CASS_ERROR_LIB_NULL_VALUE {
+				return newColumnError(result, i, retc, v)
 			}
 
 		case *[]byte:
 			var b *C.cass_byte_t
 			var sizeT C.size_t
-			if err := C.cass_value_get_bytes(value, &b, &sizeT); err != C.CASS_OK {
-				return newError(err)
+			retc := C.cass_value_get_bytes(value, &b, &sizeT)
+			if retc == C.CASS_OK {
+				*v = C.GoBytes(unsafe.Pointer(b), C.int(sizeT))
+			} else if retc != C.CASS_ERROR_LIB_NULL_VALUE {
+				return newColumnError(result, i, retc, v)
 			}
-			*v = C.GoBytes(unsafe.Pointer(b), C.int(sizeT))
 
 		case *net.IP:
 			var inet C.struct_CassInet_
-
-			if err := C.cass_value_get_inet(value, &inet); err != C.CASS_OK {
-				return newError(err)
+			retc := C.cass_value_get_inet(value, &inet)
+			if retc == C.CASS_OK {
+				size := int(inet.address_length)
+				ip := make([]byte, size)
+				for i := 0; i < size; i++ {
+					ip[i] = byte(inet.address[i])
+				}
+				*v = net.IP(ip)
+			} else if retc != C.CASS_ERROR_LIB_NULL_VALUE {
+				return newColumnError(result, i, retc, v)
 			}
-			size := int(inet.address_length)
-			ip := make([]byte, size)
-			for i := 0; i < size; i++ {
-				ip[i] = byte(inet.address[i])
-			}
-			*v = net.IP(ip)
 
 		case *UUID:
-			var cUuid C.struct_CassUuid_
+			var cuuid C.struct_CassUuid_
+			retc := C.cass_value_get_uuid(value, &cuuid)
+			if retc == C.CASS_OK {
+				buf := (*C.char)(C.malloc(C.CASS_UUID_STRING_LENGTH))
+				defer C.free(unsafe.Pointer(buf))
 
-			if err := C.cass_value_get_uuid(value, &cUuid); err != C.CASS_OK {
-				return newError(err)
+				C.cass_uuid_string(cuuid, buf)
+				suuid := C.GoString(buf)
+
+				uuid, retc := ParseUUID(suuid)
+				if retc != nil {
+					return retc
+				}
+				*v = uuid
+			} else if retc != C.CASS_ERROR_LIB_NULL_VALUE {
+				return newColumnError(result, i, retc, v)
 			}
-			buf := (*C.char)(C.malloc(C.CASS_UUID_STRING_LENGTH))
-			defer C.free(unsafe.Pointer(buf))
 
-			C.cass_uuid_string(cUuid, buf)
-			uuid := C.GoString(buf)
-
-			u, err := ParseUUID(uuid)
-			if err != nil {
-				return err
-			}
-			*v = u
+		case *int, *uint:
+			return errors.New("usage of int/uint is discouraged as these numeric types have implementation specific sizes")
 		default:
 			return errors.New("unsupported type in Scan: " + reflect.TypeOf(v).String())
 		}
@@ -315,8 +349,111 @@ func (result *Rows) Scan(args ...interface{}) error {
 	return nil
 }
 
-func newError(err C.CassError) error {
-	return errors.New(C.GoString(C.cass_error_desc(err)))
+const (
+	CASS_VALUE_TYPE_UNKNOWN   = 0xFFFF
+	CASS_VALUE_TYPE_CUSTOM    = 0x0000
+	CASS_VALUE_TYPE_ASCII     = 0x0001
+	CASS_VALUE_TYPE_BIGINT    = 0x0002
+	CASS_VALUE_TYPE_BLOB      = 0x0003
+	CASS_VALUE_TYPE_BOOLEAN   = 0x0004
+	CASS_VALUE_TYPE_COUNTER   = 0x0005
+	CASS_VALUE_TYPE_DECIMAL   = 0x0006
+	CASS_VALUE_TYPE_DOUBLE    = 0x0007
+	CASS_VALUE_TYPE_FLOAT     = 0x0008
+	CASS_VALUE_TYPE_INT       = 0x0009
+	CASS_VALUE_TYPE_TEXT      = 0x000A
+	CASS_VALUE_TYPE_TIMESTAMP = 0x000B
+	CASS_VALUE_TYPE_UUID      = 0x000C
+	CASS_VALUE_TYPE_VARCHAR   = 0x000D
+	CASS_VALUE_TYPE_VARINT    = 0x000E
+	CASS_VALUE_TYPE_TIMEUUID  = 0x000F
+	CASS_VALUE_TYPE_INET      = 0x0010
+	CASS_VALUE_TYPE_DATE      = 0x0011
+	CASS_VALUE_TYPE_TIME      = 0x0012
+	CASS_VALUE_TYPE_SMALL_INT = 0x0013
+	CASS_VALUE_TYPE_TINY_INT  = 0x0014
+	CASS_VALUE_TYPE_LIST      = 0x0020
+	CASS_VALUE_TYPE_MAP       = 0x0021
+	CASS_VALUE_TYPE_SET       = 0x0022
+	CASS_VALUE_TYPE_UDT       = 0x0030
+	CASS_VALUE_TYPE_TUPLE     = 0x0031
+)
+
+func cassType(kind C.CassValueType) string {
+	switch kind {
+	case CASS_VALUE_TYPE_ASCII:
+		return "ascii"
+	case CASS_VALUE_TYPE_BIGINT:
+		return "bigint"
+	case CASS_VALUE_TYPE_BLOB:
+		return "blob"
+	case CASS_VALUE_TYPE_BOOLEAN:
+		return "boolean"
+	case CASS_VALUE_TYPE_COUNTER:
+		return "counter"
+	case CASS_VALUE_TYPE_DECIMAL:
+		return "decimal"
+	case CASS_VALUE_TYPE_DOUBLE:
+		return "double"
+	case CASS_VALUE_TYPE_FLOAT:
+		return "float"
+	case CASS_VALUE_TYPE_INT:
+		return "int"
+	case CASS_VALUE_TYPE_TEXT:
+		return "text"
+	case CASS_VALUE_TYPE_TIMESTAMP:
+		return "timestamp"
+	case CASS_VALUE_TYPE_UUID:
+		return "uuid"
+	case CASS_VALUE_TYPE_VARCHAR:
+		return "varchar"
+	case CASS_VALUE_TYPE_VARINT:
+		return "varint"
+	case CASS_VALUE_TYPE_TIMEUUID:
+		return "timeuuid"
+	case CASS_VALUE_TYPE_INET:
+		return "inet"
+	case CASS_VALUE_TYPE_DATE:
+		return "date"
+	case CASS_VALUE_TYPE_TIME:
+		return "time"
+	case CASS_VALUE_TYPE_SMALL_INT:
+		return "smallint"
+	case CASS_VALUE_TYPE_TINY_INT:
+		return "tinyint"
+	case CASS_VALUE_TYPE_LIST:
+		return "list"
+	case CASS_VALUE_TYPE_MAP:
+		return "map"
+	case CASS_VALUE_TYPE_SET:
+		return "set"
+	case CASS_VALUE_TYPE_UDT:
+		return "udt"
+	case CASS_VALUE_TYPE_TUPLE:
+		return "tuple"
+	case CASS_VALUE_TYPE_CUSTOM:
+		return "custom"
+	default:
+		return "UNKNOWN"
+	}
+}
+
+func newError(retc C.CassError, i int) error {
+	msg := fmt.Sprintf("%s in argument %d", C.GoString(C.cass_error_desc(retc)), i)
+	return errors.New(msg)
+}
+
+func newColumnError(rows *Rows, index int, retc C.CassError, v interface{}) error {
+	columnName := rows.ColumnName(index)
+	columnType := rows.ColumnType(index)
+	argType := reflect.TypeOf(v).String()
+	errMsg := fmt.Sprintf("%s (arg %d, type: %s, column: %s, type: %s)",
+		C.GoString(C.cass_error_desc(retc)),
+		index,
+		argType,
+		columnName,
+		columnType)
+	return errors.New(errMsg)
 }
 
 type statement struct {

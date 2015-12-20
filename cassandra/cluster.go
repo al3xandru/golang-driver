@@ -111,7 +111,7 @@ func (cluster *Cluster) SetConnectionOptions(opts connectionOptions) error {
 			C.uint(opts.WriteBytesLowWatermark))
 	}
 	if cerr != C.CASS_OK {
-		return newError(cerr)
+		return newError(cerr, 0)
 	}
 	return nil
 }
@@ -131,7 +131,7 @@ func (cluster *Cluster) SetQueueOptions(opts queueOptions) error {
 	// 		C.uint(opts.MaxLog))
 	// }
 	if cerr != C.CASS_OK {
-		return newError(cerr)
+		return newError(cerr, 0)
 	}
 	return nil
 }
@@ -155,7 +155,7 @@ func (cluster *Cluster) SetRequestOptions(opts requestOptions) error {
 			C.uint(opts.PendingRequestsLowWatermark))
 	}
 	if cerr != C.CASS_OK {
-		return newError(cerr)
+		return newError(cerr, 0)
 	}
 	return nil
 }
