@@ -9,6 +9,8 @@ import (
 	"encoding/hex"
 	"fmt"
 	"math"
+	"strconv"
+	"strings"
 	"time"
 )
 
@@ -46,19 +48,73 @@ func NewDate(year int, month time.Month, day int) *Date {
 
 // Cassandra `time` type represents a time of day
 // with no date (and no notion of time zone)
-type Time struct {
-	Nanos int64
+type Time int64
+
+var nanosInADay int64 = 24 * int64(time.Hour)
+
+func NewTime(hours, minutes, seconds, nanos uint) (Time, error) {
+	var nanotime int64 = int64(hours)*int64(time.Hour) +
+		int64(minutes)*int64(time.Minute) +
+		int64(seconds)*int64(time.Second) +
+		int64(nanos)
+	if nanotime < 0 || nanotime > nanosInADay {
+		return 0, fmt.Errorf("Time value must be bigger than 0 and less than the number of nanoseconds in a day (%d)", nanosInADay)
+	}
+	return Time(nanotime), nil
 }
 
-func (t *Time) Duration() time.Duration {
-	return time.Duration(t.Nanos) * time.Nanosecond
+func ParseTime(str string) (Time, error) {
+	parts := strings.Split(str, ".")
+	hms := strings.Split(parts[0], ":")
+	if len(hms) != 3 {
+		return 0, fmt.Errorf("Time must be in format hh:mm:ss.nnnnnnnnn")
+	}
+	var nanotime int64
+	n, err := strconv.ParseInt(hms[0], 10, 64)
+	if err != nil {
+		return 0, fmt.Errorf("Time must be in format hh:mm:ss.nnnnnnnnn")
+	}
+	nanotime += n * int64(time.Hour)
+	n, err = strconv.ParseInt(hms[1], 10, 64)
+	if err != nil {
+		return 0, fmt.Errorf("Time must be in format hh:mm:ss.nnnnnnnnn")
+	}
+	nanotime += n * int64(time.Minute)
+	n, err = strconv.ParseInt(hms[2], 10, 64)
+	if err != nil {
+		return 0, fmt.Errorf("Time must be in format hh:mm:ss.nnnnnnnnn")
+	}
+	nanotime += n * int64(time.Second)
+	if len(parts) > 1 {
+		padded := parts[1] + strings.Repeat("0", (9-len(parts[1])))
+		fmt.Printf(padded)
+		n, err = strconv.ParseInt(padded, 10, 64)
+		if err != nil {
+			return 0, fmt.Errorf("Time must be in format hh:mm:ss.nnnnnnnnn")
+		}
+		nanotime += n
+	}
+	return Time(nanotime), nil
 }
 
-// func NewTime(hours, minutes, seconds, millis uint) *Time {
-// 	var nanos int64 = hours * Duration.Hour * Duration.Minute * Duration.Second * Duration.Millisecond * Duration.Microsecond +
-// 		minutes * Duration.Minute * Duration.Second * Duration.Millisecond * Duration.Microsecond +
-// 		seconds * Duration.Millisecond * Duration.Microsecond
-// }
+func (t Time) Hours() uint {
+	return uint(math.Floor(float64(t) / float64(time.Hour)))
+
+}
+
+func (t Time) Minutes() uint {
+	minutes := math.Floor(float64(t) / float64(time.Minute))
+	return uint(math.Remainder(minutes, 60))
+}
+
+func (t Time) Seconds() uint {
+	seconds := math.Floor(float64(t) / float64(time.Second))
+	return uint(math.Remainder(seconds, 60))
+}
+
+func (t Time) Nanoseconds() uint {
+	return uint(math.Remainder(float64(t), float64(time.Second)))
+}
 
 // Used to represent both a Cassandra `uuid` (UUID v4)
 // and `timeuuid` (UUID v1).

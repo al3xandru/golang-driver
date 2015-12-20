@@ -16,7 +16,7 @@ func TestMissingValues(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer test.TearDown(alltypesCleanup)
-	rows, err := session.Execute("SELECT a, txt, vchr, bol, bigi, ii, smalli, tinyi, dbl, flt, ip, tuid, uid, blb FROM golang_driver.alltypes")
+	rows, err := session.Execute("SELECT a, txt, vchr, bol, bigi, ii, smalli, tinyi, dbl, flt, ip, tuid, uid, blb, tm FROM golang_driver.alltypes")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -31,14 +31,15 @@ func TestMissingValues(t *testing.T) {
 	var si int16
 	var ti int8
 	var bl []byte
+	var ip net.IP
 	var tu cassandra.UUID
 	var uu cassandra.UUID
-	var ip net.IP
+	var tm cassandra.Time
 
 	var empty [16]byte
 
 	if rows.Next() {
-		if err := rows.Scan(&asc, &txt, &vchar, &bo, &bi, &ii, &si, &ti, &dbl, &flt, &ip, &tu, &uu, &bl); err != nil {
+		if err := rows.Scan(&asc, &txt, &vchar, &bo, &bi, &ii, &si, &ti, &dbl, &flt, &ip, &tu, &uu, &bl, &tm); err != nil {
 			t.Fatal(err)
 		}
 		if asc != "" {
@@ -92,9 +93,9 @@ func TestMissingValues(t *testing.T) {
 		// if d != nil t {
 		// 	t.Errorf("default date should be 0 (%s)", d.String())
 		// }
-		// if tm.Nanos != 0 {
-		// 	t.Errorf("default time should be 0 != %d (%s)", tm.Nanos, tm.Duration())
-		// }
+		if tm != 0 {
+			t.Errorf("default time should be 0 != %d", tm)
+		}
 		// if ts != 0 {
 		// 	t.Errorf("default timestamp should be 0 != %d", ts)
 		// }

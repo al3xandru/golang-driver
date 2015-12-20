@@ -51,7 +51,7 @@ func (stmt *Statement) bind(args ...interface{}) error {
 		case Date:
 			cerr = C.cass_statement_bind_uint32(stmt.cptr, C.size_t(i), C.cass_uint32_t(v.Days))
 		case Time:
-			cerr = C.cass_statement_bind_int64(stmt.cptr, C.size_t(i), C.cass_int64_t(v.Nanos))
+			cerr = C.cass_statement_bind_int64(stmt.cptr, C.size_t(i), C.cass_int64_t(v))
 		case Timestamp:
 			cerr = C.cass_statement_bind_int64(stmt.cptr, C.size_t(i), C.cass_int64_t(v))
 		case string:

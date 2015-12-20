@@ -272,7 +272,7 @@ func (result *Rows) Scan(args ...interface{}) error {
 			var i64 C.cass_int64_t
 			retc = C.cass_value_get_int64(value, &i64)
 			if retc != C.CASS_OK {
-				v.Nanos = int64(i64)
+				*v = Time(i64)
 			} else if retc != C.CASS_ERROR_LIB_NULL_VALUE {
 				return newColumnError(result, i, retc, v)
 			}

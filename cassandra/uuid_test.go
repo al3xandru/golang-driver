@@ -117,26 +117,26 @@ func ExampleByteTypes(session *cassandra.Session) {
 //		t time,
 //		ts timestamp
 // );
-func ExampleTimeTypes(session *cassandra.Session) {
-	d := cassandra.NewDate(1920, 8, 23)
-	fmt.Printf("Cassandra Date: %s (%d)\n", d.String(), d.Days)
+// func ExampleTimeTypes(session *cassandra.Session) {
+// 	d := cassandra.NewDate(1920, 8, 23)
+// 	fmt.Printf("Cassandra Date: %s (%d)\n", d.String(), d.Days)
 
-	result, err := session.Execute("select d, t, ts  from golang.typestime")
-	if err != nil {
-		fmt.Printf("ERROR Execute: %s\r\n", err.Error())
-		return
-	}
-	defer result.Close()
+// 	result, err := session.Execute("select d, t, ts  from golang.typestime")
+// 	if err != nil {
+// 		fmt.Printf("ERROR Execute: %s\r\n", err.Error())
+// 		return
+// 	}
+// 	defer result.Close()
 
-	for result.Next() {
-		var d cassandra.Date
-		var t cassandra.Time
-		var ts cassandra.Timestamp
+// 	for result.Next() {
+// 		var d cassandra.Date
+// 		var t cassandra.Time
+// 		var ts cassandra.Timestamp
 
-		if err := result.Scan(&d, &t, &ts); err != nil {
-			fmt.Printf("Row error: %s\n", err.Error())
-			continue
-		}
-		fmt.Printf("Date: %s, Time: %s, Timestamp: %d\n", d.String(), t.Duration(), ts)
-	}
-}
+// 		if err := result.Scan(&d, &t, &ts); err != nil {
+// 			fmt.Printf("Row error: %s\n", err.Error())
+// 			continue
+// 		}
+// 		fmt.Printf("Date: %s, Time: %d, Timestamp: %d\n", d.String(), t.Nanotime, ts)
+// 	}
+// }
