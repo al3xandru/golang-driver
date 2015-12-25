@@ -214,7 +214,7 @@ func (result *Rows) Scan(args ...interface{}) error {
 				return newColumnError(result, i, retc, v)
 			}
 
-		case *int32:
+		case *int32: // int
 			var i32 C.cass_int32_t
 			retc = C.cass_value_get_int32(value, &i32)
 			if retc == C.CASS_OK {
@@ -223,15 +223,7 @@ func (result *Rows) Scan(args ...interface{}) error {
 				return newColumnError(result, i, retc, v)
 			}
 
-		case *uint32:
-			var u32 C.cass_uint32_t
-			if retc = C.cass_value_get_uint32(value, &u32); retc != C.CASS_OK {
-				return newColumnError(result, i, retc, v)
-				return newError(retc, i)
-			}
-			*v = uint32(u32)
-
-		case *int64:
+		case *int64: // bigint, counter
 			var i64 C.cass_int64_t
 			retc = C.cass_value_get_int64(value, &i64)
 			if retc == C.CASS_OK {
@@ -240,7 +232,7 @@ func (result *Rows) Scan(args ...interface{}) error {
 				return newColumnError(result, i, retc, v)
 			}
 
-		case *float32:
+		case *float32: // float
 			var f32 C.cass_float_t
 			retc = C.cass_value_get_float(value, &f32)
 			if retc == C.CASS_OK {
@@ -249,7 +241,7 @@ func (result *Rows) Scan(args ...interface{}) error {
 				return newColumnError(result, i, retc, v)
 			}
 
-		case *float64:
+		case *float64: // double
 			var f64 C.cass_double_t
 			retc = C.cass_value_get_double(value, &f64)
 			if retc == C.CASS_OK {
@@ -258,7 +250,7 @@ func (result *Rows) Scan(args ...interface{}) error {
 				return newColumnError(result, i, retc, v)
 			}
 
-		case *string:
+		case *string: // ascii, text, varchar
 			var str *C.char
 			var size C.size_t
 			retc := C.cass_value_get_string(value, &str, &size)
@@ -268,7 +260,7 @@ func (result *Rows) Scan(args ...interface{}) error {
 				return newColumnError(result, i, retc, v)
 			}
 
-		case *Time:
+		case *Time: // time
 			var i64 C.cass_int64_t
 			retc = C.cass_value_get_int64(value, &i64)
 			if retc == C.CASS_OK {
@@ -277,7 +269,7 @@ func (result *Rows) Scan(args ...interface{}) error {
 				return newColumnError(result, i, retc, v)
 			}
 
-		case *Date:
+		case *Date: // date
 			var u32 C.cass_uint32_t
 			retc = C.cass_value_get_uint32(value, &u32)
 			if retc == C.CASS_OK {
@@ -286,7 +278,7 @@ func (result *Rows) Scan(args ...interface{}) error {
 				return newColumnError(result, i, retc, v)
 			}
 
-		case *Timestamp:
+		case *Timestamp: // timestamp
 			var i64 C.cass_int64_t
 			retc = C.cass_value_get_int64(value, &i64)
 			if retc == C.CASS_OK {
@@ -295,7 +287,7 @@ func (result *Rows) Scan(args ...interface{}) error {
 				return newColumnError(result, i, retc, v)
 			}
 
-		case *[]byte:
+		case *[]byte: // blob
 			var b *C.cass_byte_t
 			var sizeT C.size_t
 			retc := C.cass_value_get_bytes(value, &b, &sizeT)
@@ -305,7 +297,7 @@ func (result *Rows) Scan(args ...interface{}) error {
 				return newColumnError(result, i, retc, v)
 			}
 
-		case *net.IP:
+		case *net.IP: // inet
 			var inet C.struct_CassInet_
 			retc := C.cass_value_get_inet(value, &inet)
 			if retc == C.CASS_OK {
@@ -319,7 +311,7 @@ func (result *Rows) Scan(args ...interface{}) error {
 				return newColumnError(result, i, retc, v)
 			}
 
-		case *UUID:
+		case *UUID: // uuid, timeuuid
 			var cuuid C.struct_CassUuid_
 			retc := C.cass_value_get_uuid(value, &cuuid)
 			if retc == C.CASS_OK {

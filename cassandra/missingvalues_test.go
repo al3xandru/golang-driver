@@ -92,9 +92,6 @@ func TestMissingValues(t *testing.T) {
 			t.Errorf("default inet should be empty != %s", ip.String())
 		}
 		// time types
-		// if d != nil t {
-		// 	t.Errorf("default date should be 0 (%s)", d.String())
-		// }
 		if tm != 0 {
 			t.Errorf("default time should be 0 != %d", tm)
 		}
