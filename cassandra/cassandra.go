@@ -159,7 +159,7 @@ func (result *Rows) ColumnName(index int) string {
 }
 
 func (result *Rows) ColumnType(index int) string {
-	return cassType(C.cass_result_column_type(result.cptr, C.size_t(index)))
+	return cassTypeName(C.cass_result_column_type(result.cptr, C.size_t(index)))
 }
 
 // func (result *Rows) HasMorePages() bool {
@@ -185,52 +185,60 @@ func (result *Rows) Scan(args ...interface{}) error {
 	for i, v := range args {
 		value := C.cass_row_get_column(row, C.size_t(i))
 
+		tv := reflect.TypeOf(v)
+		fmt.Printf("Kind: %v, S: %s\n", tv.Kind(), tv.String())
+		f, terr := read(value, C.cass_result_column_type(result.cptr, C.size_t(i)), v)
+		fmt.Printf("read(...): %t, %v, %v\n", f, reflect.ValueOf(v), terr)
+		if terr == nil && f {
+			continue
+		}
+
 		switch v := v.(type) {
 
-		case *bool:
-			var b C.cass_bool_t
-			retc = C.cass_value_get_bool(value, &b)
-			if retc == C.CASS_OK {
-				*v = bool(b != 0)
-			} else if retc != C.CASS_ERROR_LIB_NULL_VALUE {
-				return newColumnError(result, i, retc, v)
-			}
+		// case *bool:
+		// 	var b C.cass_bool_t
+		// 	retc = C.cass_value_get_bool(value, &b)
+		// 	if retc == C.CASS_OK {
+		// 		*v = bool(b != 0)
+		// 	} else if retc != C.CASS_ERROR_LIB_NULL_VALUE {
+		// 		return newColumnError(result, i, retc, v)
+		// 	}
 
-		case *int8: // tinyint
-			var i8 C.cass_int8_t
-			retc = C.cass_value_get_int8(value, &i8)
-			if retc == C.CASS_OK {
-				*v = int8(i8)
-			} else if retc != C.CASS_ERROR_LIB_NULL_VALUE {
-				return newColumnError(result, i, retc, v)
-			}
+		// case *int8: // tinyint
+		// 	var i8 C.cass_int8_t
+		// 	retc = C.cass_value_get_int8(value, &i8)
+		// 	if retc == C.CASS_OK {
+		// 		*v = int8(i8)
+		// 	} else if retc != C.CASS_ERROR_LIB_NULL_VALUE {
+		// 		return newColumnError(result, i, retc, v)
+		// 	}
 
-		case *int16: // smallint
-			var i16 C.cass_int16_t
-			retc = C.cass_value_get_int16(value, &i16)
-			if retc == C.CASS_OK {
-				*v = int16(i16)
-			} else if retc != C.CASS_ERROR_LIB_NULL_VALUE {
-				return newColumnError(result, i, retc, v)
-			}
+		// case *int16: // smallint
+		// 	var i16 C.cass_int16_t
+		// 	retc = C.cass_value_get_int16(value, &i16)
+		// 	if retc == C.CASS_OK {
+		// 		*v = int16(i16)
+		// 	} else if retc != C.CASS_ERROR_LIB_NULL_VALUE {
+		// 		return newColumnError(result, i, retc, v)
+		// 	}
 
-		case *int32: // int
-			var i32 C.cass_int32_t
-			retc = C.cass_value_get_int32(value, &i32)
-			if retc == C.CASS_OK {
-				*v = int32(i32)
-			} else if retc != C.CASS_ERROR_LIB_NULL_VALUE {
-				return newColumnError(result, i, retc, v)
-			}
+		// case *int32: // int
+		// 	var i32 C.cass_int32_t
+		// 	retc = C.cass_value_get_int32(value, &i32)
+		// 	if retc == C.CASS_OK {
+		// 		*v = int32(i32)
+		// 	} else if retc != C.CASS_ERROR_LIB_NULL_VALUE {
+		// 		return newColumnError(result, i, retc, v)
+		// 	}
 
-		case *int64: // bigint, counter
-			var i64 C.cass_int64_t
-			retc = C.cass_value_get_int64(value, &i64)
-			if retc == C.CASS_OK {
-				*v = int64(i64)
-			} else if retc != C.CASS_ERROR_LIB_NULL_VALUE {
-				return newColumnError(result, i, retc, v)
-			}
+		// case *int64: // bigint, counter
+		// 	var i64 C.cass_int64_t
+		// 	retc = C.cass_value_get_int64(value, &i64)
+		// 	if retc == C.CASS_OK {
+		// 		*v = int64(i64)
+		// 	} else if retc != C.CASS_ERROR_LIB_NULL_VALUE {
+		// 		return newColumnError(result, i, retc, v)
+		// 	}
 
 		case *float32: // float
 			var f32 C.cass_float_t
@@ -332,6 +340,7 @@ func (result *Rows) Scan(args ...interface{}) error {
 
 		case *int, *uint:
 			return errors.New("usage of int/uint is discouraged as these numeric types have implementation specific sizes")
+
 		default:
 			return errors.New("unsupported type in Scan: " + reflect.TypeOf(v).String())
 		}
@@ -370,7 +379,7 @@ const (
 	CASS_VALUE_TYPE_TUPLE     = 0x0031
 )
 
-func cassType(kind C.CassValueType) string {
+func cassTypeName(kind C.CassValueType) string {
 	switch kind {
 	case CASS_VALUE_TYPE_ASCII:
 		return "ascii"
