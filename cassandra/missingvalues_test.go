@@ -104,11 +104,7 @@ func TestMissingValues(t *testing.T) {
 	} else {
 		t.Fatal("There must be 1 row in golang_driver.alltypes")
 	}
-}
-
-func testIntResult(session *cassandra.Session, t *testing.T) {
-	// if a result is read in int or uint it should error
-	// C* `int` maps to `int32`
+	// t.Fail()
 }
 
 var (
