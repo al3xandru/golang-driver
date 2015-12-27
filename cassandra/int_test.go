@@ -10,18 +10,18 @@ func TestIntTypes(t *testing.T) {
 	session := test.GetSession()
 	defer test.Shutdown()
 
-	if err := test.Setup(inttypesSetup); err != nil {
+	if err := test.Setup(intsSetup); err != nil {
 		t.Log("Unexpected error while setup. You might need to clean up manually golang_driver keyspace")
 		t.Fatal(err)
 	}
-	defer test.TearDown(inttypesCleanup)
+	defer test.TearDown(intsCleanup)
 
 	testReadValues(t, session)
 	testMissingValues(t, session)
 }
 
 func testReadValues(t *testing.T, session *cassandra.Session) {
-	rows, err := session.Execute("SELECT bgnt, nt, smllnt, tnnt, nt FROM golang_driver.inttypes WHERE id = 1")
+	rows, err := session.Execute("SELECT bgnt, nt, smllnt, tnnt, nt FROM golang_driver.ints WHERE id = 1")
 	if err != nil {
 		t.Error(err)
 		return
@@ -62,7 +62,7 @@ func testReadValues(t *testing.T, session *cassandra.Session) {
 }
 
 func testMissingValues(t *testing.T, session *cassandra.Session) {
-	rows, err := session.Execute("SELECT bgnt, nt, smllnt, tnnt, nt FROM golang_driver.inttypes WHERE id = 2")
+	rows, err := session.Execute("SELECT bgnt, nt, smllnt, tnnt, nt FROM golang_driver.ints WHERE id = 2")
 	if err != nil {
 		t.Error(err)
 		return
@@ -103,16 +103,16 @@ func testMissingValues(t *testing.T, session *cassandra.Session) {
 }
 
 var (
-	inttypesSetup = []string{
+	intsSetup = []string{
 		"CREATE KEYSPACE IF NOT EXISTS golang_driver WITH replication = {'class': 'SimpleStrategy', 'replication_factor': 1};",
-		`CREATE TABLE IF NOT EXISTS golang_driver.inttypes (id int PRIMARY KEY, 
+		`CREATE TABLE IF NOT EXISTS golang_driver.ints (id int PRIMARY KEY, 
 		bgnt bigint, nt int, smllnt smallint, tnnt tinyint)`,
-		`INSERT INTO golang_driver.inttypes (id, bgnt, nt, smllnt, tnnt) 
+		`INSERT INTO golang_driver.ints (id, bgnt, nt, smllnt, tnnt) 
 		VALUES (1, 9223372036854770000, -2147483000, 32000, 126)`,
-		`INSERT INTO golang_driver.inttypes (id) VALUES (2)`,
+		`INSERT INTO golang_driver.ints (id) VALUES (2)`,
 	}
 
-	inttypesCleanup = []string{
-		"DROP TABLE golang_driver.inttypes",
+	intsCleanup = []string{
+		"DROP TABLE golang_driver.ints",
 	}
 )
