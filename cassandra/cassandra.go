@@ -189,9 +189,10 @@ func (result *Rows) Scan(args ...interface{}) error {
 		fmt.Printf("Kind: %v, S: %s\n", tv.Kind(), tv.String())
 		f, terr := read(value, C.cass_result_column_type(result.cptr, C.size_t(i)), v)
 		fmt.Printf("read(...): %t, %v, %v\n", f, reflect.ValueOf(v), terr)
-		if terr == nil && f {
-			continue
+		if terr != nil {
+			return terr
 		}
+		continue
 
 		switch v := v.(type) {
 
@@ -240,23 +241,23 @@ func (result *Rows) Scan(args ...interface{}) error {
 		// 		return newColumnError(result, i, retc, v)
 		// 	}
 
-		case *float32: // float
-			var f32 C.cass_float_t
-			retc = C.cass_value_get_float(value, &f32)
-			if retc == C.CASS_OK {
-				*v = float32(f32)
-			} else if retc != C.CASS_ERROR_LIB_NULL_VALUE {
-				return newColumnError(result, i, retc, v)
-			}
+		// case *float32: // float
+		// 	var f32 C.cass_float_t
+		// 	retc = C.cass_value_get_float(value, &f32)
+		// 	if retc == C.CASS_OK {
+		// 		*v = float32(f32)
+		// 	} else if retc != C.CASS_ERROR_LIB_NULL_VALUE {
+		// 		return newColumnError(result, i, retc, v)
+		// 	}
 
-		case *float64: // double
-			var f64 C.cass_double_t
-			retc = C.cass_value_get_double(value, &f64)
-			if retc == C.CASS_OK {
-				*v = float64(f64)
-			} else if retc != C.CASS_ERROR_LIB_NULL_VALUE {
-				return newColumnError(result, i, retc, v)
-			}
+		// case *float64: // double
+		// 	var f64 C.cass_double_t
+		// 	retc = C.cass_value_get_double(value, &f64)
+		// 	if retc == C.CASS_OK {
+		// 		*v = float64(f64)
+		// 	} else if retc != C.CASS_ERROR_LIB_NULL_VALUE {
+		// 		return newColumnError(result, i, retc, v)
+		// 	}
 
 		case *string: // ascii, text, varchar
 			var str *C.char

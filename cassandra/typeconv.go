@@ -35,6 +35,10 @@ func read(value *C.CassValue, cassType C.CassValueType, dst interface{}) (bool, 
 		return readInt(value, cassType, dst)
 	case CASS_VALUE_TYPE_BOOLEAN:
 		return readBool(value, cassType, dst)
+	case CASS_VALUE_TYPE_FLOAT:
+		return readFloat(value, cassType, dst)
+	case CASS_VALUE_TYPE_DOUBLE:
+		return readDouble(value, cassType, dst)
 	case CASS_VALUE_TYPE_LIST:
 		return readList(value, cassType, dst)
 	case CASS_VALUE_TYPE_MAP:
@@ -242,6 +246,103 @@ func valAsInt(value *C.CassValue) (found bool, v int64, err error) {
 		}
 	}
 
+	return true, 0, fmt.Errorf("cannot read %s", cassTypeName(cassType))
+}
+
+func readFloat(value *C.CassValue, cassType C.CassValueType, dst interface{}) (bool, error) {
+	switch dst := dst.(type) {
+	case *float32:
+		if isNull(value) {
+			return false, nil
+		}
+		f, v, err := valAsFloat(value)
+		*dst = float32(v)
+		return f, err
+	}
+
+	dstVal := reflect.ValueOf(dst)
+	if dstVal.Kind() != reflect.Ptr {
+		return true, fmt.Errorf("cannot read %s into non-pointer %T",
+			cassTypeName(cassType), dst)
+	}
+
+	dstVal = dstVal.Elem()
+
+	switch dstVal.Type().Kind() {
+	case reflect.Float32:
+		if isNull(value) {
+			dstVal.Set(reflect.Zero(dstVal.Type()))
+			return false, nil
+		} else {
+			f, v, err := valAsFloat(value)
+			dstVal.SetFloat(float64(v))
+			return f, err
+		}
+	}
+	return true, fmt.Errorf("cannot read %s type into %T", cassTypeName(cassType),
+		dst)
+}
+
+func readDouble(value *C.CassValue, cassType C.CassValueType, dst interface{}) (bool, error) {
+	switch dst := dst.(type) {
+	case *float64:
+		if isNull(value) {
+			return false, nil
+		}
+		f, v, err := valAsFloat(value)
+		*dst = v
+		return f, err
+	}
+
+	dstVal := reflect.ValueOf(dst)
+	if dstVal.Kind() != reflect.Ptr {
+		return true, fmt.Errorf("cannot read %s into non-pointer %T",
+			cassTypeName(cassType), dst)
+	}
+
+	dstVal = dstVal.Elem()
+
+	switch dstVal.Type().Kind() {
+	case reflect.Float64:
+		if isNull(value) {
+			dstVal.Set(reflect.Zero(dstVal.Type()))
+			return false, nil
+		} else {
+			f, v, err := valAsFloat(value)
+			dstVal.SetFloat(v)
+			return f, err
+		}
+	}
+	return true, fmt.Errorf("cannot read %s type into %T", cassTypeName(cassType),
+		dst)
+}
+
+func valAsFloat(value *C.CassValue) (found bool, v float64, err error) {
+	cassType := C.cass_value_type(value)
+	switch cassType {
+	case CASS_VALUE_TYPE_FLOAT:
+		var f32 C.cass_float_t
+		retc := C.cass_value_get_float(value, &f32)
+		switch retc {
+		case C.CASS_OK:
+			found = true
+			v = float64(f32)
+			return
+		default:
+			return true, 0, errors.New(C.GoString(C.cass_error_desc(retc)))
+		}
+	case CASS_VALUE_TYPE_DOUBLE:
+		var f64 C.cass_double_t
+		retc := C.cass_value_get_double(value, &f64)
+		switch retc {
+		case C.CASS_OK:
+			found = true
+			v = float64(f64)
+			return
+		default:
+			return true, 0, errors.New(C.GoString(C.cass_error_desc(retc)))
+		}
+	}
 	return true, 0, fmt.Errorf("cannot read %s", cassTypeName(cassType))
 }
 
