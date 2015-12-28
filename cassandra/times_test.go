@@ -88,39 +88,42 @@ func TestTimeTypes(t *testing.T) {
 	}
 	defer rows.Close()
 
+	if !rows.Next() {
+		t.Fatal("there must be a result")
+	}
 	expectedTime, _ := cassandra.NewTime(13, 29, 7, 234000000)
 	var tt cassandra.Time
 	var ts cassandra.Timestamp
 	var td cassandra.Date
+
+	if err := rows.Scan(&td, &tt, &ts); err != nil {
+		t.Fatal(err)
+	}
+	if td.String() != "2015-08-23" {
+		t.Errorf("Date '2015-08-23' != %s", td.String())
+	}
+	if tt != expectedTime {
+		t.Errorf("%02d:%02d:%02d.%d", tt.Hours(), tt.Minutes(), tt.Seconds(), tt.Nanoseconds())
+	}
+	if ts.SecondsSinceEpoch != 1450606299 {
+		t.Errorf("Timestamp 1450606299 != %d (%s)", ts.SecondsSinceEpoch, ts.Time())
+	}
+
+	// access as raw values
 	var tAsInt64 int64
 	var dAsUint32 uint32
 	var tsAsInt64 int64
-
-	if rows.Next() {
-		if err := rows.Scan(&td, &tt, &ts); err != nil {
-			t.Fatal(err)
-		}
-		if td.String() != "2015-08-23" {
-			t.Errorf("Date '2015-08-23' != %s", td.String())
-		}
-		if tt != expectedTime {
-			t.Errorf("%02d:%02d:%02d.%d", tt.Hours(), tt.Minutes(), tt.Seconds(), tt.Nanoseconds())
-		}
-		if ts.SecondsSinceEpoch != 1450606299 {
-			t.Errorf("Timestamp 1450606299 != %d (%s)", ts.SecondsSinceEpoch, ts.Time())
-		}
-		if err := rows.Scan(&dAsUint32, &tAsInt64, &tsAsInt64); err != nil {
-			t.Fatal(err)
-		}
-		if dAsUint32 != 2147500318 {
-			t.Errorf("Date 2147500318 != %d", dAsUint32)
-		}
-		if tAsInt64 != 48547234000000 {
-			t.Errorf("Time 13:29:07.234 (48547234000000) != %d", tAsInt64)
-		}
-		if tsAsInt64 != 1450606299 {
-			t.Errorf("Timestamp 47234000000 != %d", tsAsInt64)
-		}
+	if err := rows.Scan(&dAsUint32, &tAsInt64, &tsAsInt64); err != nil {
+		t.Fatal(err)
+	}
+	if dAsUint32 != 2147500318 {
+		t.Errorf("Date 2147500318 != %d", dAsUint32)
+	}
+	if tAsInt64 != 48547234000000 {
+		t.Errorf("Time 13:29:07.234 (48547234000000) != %d", tAsInt64)
+	}
+	if tsAsInt64 != 1450606299 {
+		t.Errorf("Timestamp 47234000000 != %d", tsAsInt64)
 	}
 }
 
