@@ -259,47 +259,47 @@ func (result *Rows) Scan(args ...interface{}) error {
 		// 		return newColumnError(result, i, retc, v)
 		// 	}
 
-		case *string: // ascii, text, varchar
-			var str *C.char
-			var size C.size_t
-			retc := C.cass_value_get_string(value, &str, &size)
-			if retc == C.CASS_OK {
-				*v = C.GoStringN(str, C.int(size))
-			} else if retc != C.CASS_ERROR_LIB_NULL_VALUE {
-				return newColumnError(result, i, retc, v)
-			}
+		// case *string: // ascii, text, varchar
+		// 	var str *C.char
+		// 	var size C.size_t
+		// 	retc := C.cass_value_get_string(value, &str, &size)
+		// 	if retc == C.CASS_OK {
+		// 		*v = C.GoStringN(str, C.int(size))
+		// 	} else if retc != C.CASS_ERROR_LIB_NULL_VALUE {
+		// 		return newColumnError(result, i, retc, v)
+		// 	}
 
-		case *Time: // time
-			var i64 C.cass_int64_t
-			retc = C.cass_value_get_int64(value, &i64)
-			if retc == C.CASS_OK {
-				*v = Time(i64)
-			} else if retc != C.CASS_ERROR_LIB_NULL_VALUE {
-				return newColumnError(result, i, retc, v)
-			}
+		// case *Time: // time
+		// 	var i64 C.cass_int64_t
+		// 	retc = C.cass_value_get_int64(value, &i64)
+		// 	if retc == C.CASS_OK {
+		// 		*v = Time(i64)
+		// 	} else if retc != C.CASS_ERROR_LIB_NULL_VALUE {
+		// 		return newColumnError(result, i, retc, v)
+		// 	}
 
-		case *Date: // date
-			var u32 C.cass_uint32_t
-			retc = C.cass_value_get_uint32(value, &u32)
-			if retc == C.CASS_OK {
-				v.Days = uint32(u32)
-			} else if retc != C.CASS_ERROR_LIB_NULL_VALUE {
-				return newColumnError(result, i, retc, v)
-			}
+		// case *Date: // date
+		// 	var u32 C.cass_uint32_t
+		// 	retc = C.cass_value_get_uint32(value, &u32)
+		// 	if retc == C.CASS_OK {
+		// 		v.Days = uint32(u32)
+		// 	} else if retc != C.CASS_ERROR_LIB_NULL_VALUE {
+		// 		return newColumnError(result, i, retc, v)
+		// 	}
 
-		case *Timestamp: // timestamp
-			var i64 C.cass_int64_t
-			retc = C.cass_value_get_int64(value, &i64)
-			if retc == C.CASS_OK {
-				v.SecondsSinceEpoch = int64(i64)
-			} else if retc != C.CASS_ERROR_LIB_NULL_VALUE {
-				return newColumnError(result, i, retc, v)
-			}
+		// case *Timestamp: // timestamp
+		// 	var i64 C.cass_int64_t
+		// 	retc = C.cass_value_get_int64(value, &i64)
+		// 	if retc == C.CASS_OK {
+		// 		v.SecondsSinceEpoch = int64(i64)
+		// 	} else if retc != C.CASS_ERROR_LIB_NULL_VALUE {
+		// 		return newColumnError(result, i, retc, v)
+		// 	}
 
 		case *[]byte: // blob
 			var b *C.cass_byte_t
 			var sizeT C.size_t
-			retc := C.cass_value_get_bytes(value, &b, &sizeT)
+			retc = C.cass_value_get_bytes(value, &b, &sizeT)
 			if retc == C.CASS_OK {
 				*v = C.GoBytes(unsafe.Pointer(b), C.int(sizeT))
 			} else if retc != C.CASS_ERROR_LIB_NULL_VALUE {
@@ -308,7 +308,7 @@ func (result *Rows) Scan(args ...interface{}) error {
 
 		case *net.IP: // inet
 			var inet C.struct_CassInet_
-			retc := C.cass_value_get_inet(value, &inet)
+			retc = C.cass_value_get_inet(value, &inet)
 			if retc == C.CASS_OK {
 				size := int(inet.address_length)
 				ip := make([]byte, size)
@@ -322,7 +322,7 @@ func (result *Rows) Scan(args ...interface{}) error {
 
 		case *UUID: // uuid, timeuuid
 			var cuuid C.struct_CassUuid_
-			retc := C.cass_value_get_uuid(value, &cuuid)
+			retc = C.cass_value_get_uuid(value, &cuuid)
 			if retc == C.CASS_OK {
 				buf := (*C.char)(C.malloc(C.CASS_UUID_STRING_LENGTH))
 				defer C.free(unsafe.Pointer(buf))
