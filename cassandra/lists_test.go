@@ -6,7 +6,7 @@ import (
 	"testing"
 )
 
-func TestCollections(t *testing.T) {
+func TestLists(t *testing.T) {
 	// t.Skipf("Collections do not work yet")
 	session := test.GetSession()
 	defer test.Shutdown()
