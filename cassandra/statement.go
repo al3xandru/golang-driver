@@ -48,6 +48,14 @@ func (stmt *Statement) bind(args ...interface{}) error {
 			cerr = C.cass_statement_bind_null(stmt.cptr, C.size_t(i))
 		case uint32:
 			cerr = C.cass_statement_bind_uint32(stmt.cptr, C.size_t(i), C.cass_uint32_t(v))
+		case UUID:
+			cStr := C.CString(v.String())
+			defer C.free(unsafe.Pointer(cStr))
+			var cUuid C.CassUuid
+			retc := C.cass_uuid_from_string(cStr, &cUuid)
+			if retc == C.CASS_OK {
+				cerr = C.cass_statement_bind_uuid(stmt.cptr, C.size_t(i), cUuid)
+			}
 		case Date:
 			cerr = C.cass_statement_bind_uint32(stmt.cptr, C.size_t(i), C.cass_uint32_t(v.Days))
 		case Time:

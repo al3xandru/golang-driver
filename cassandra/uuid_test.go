@@ -1,142 +1,82 @@
 package cassandra_test
 
 import (
-	"fmt"
 	"golang-driver/cassandra"
 	"golang-driver/cassandra/test"
-	"net"
 	"testing"
 )
 
+const (
+	timeuuid_ = "9ecc5dd0-a548-11e5-83b1-dfa924dad615"
+	uuid_     = "f0d07136-62f9-4d18-a6ce-cd5f4beb4348"
+)
+
 func TestUuids(t *testing.T) {
-	t.Skip("work in progress")
 	session := test.GetSession()
 	defer test.Shutdown()
 
-	if err := setup(session); err != nil {
+	if err := test.Setup(uuidSetup); err != nil {
 		t.Log("Unexpected error while setup. You might need to clean up manually golang_driver keyspace")
 		t.Fatal(err)
 	}
-	defer tearDown(session)
-	t.Error("just to see what's going on")
+	defer test.TearDown(uuidCleanup)
+
+	if err := testInsert(session); err != nil {
+		t.Error(err)
+	}
+	testSelect(t, session)
+	// t.Fail()
 }
 
-func insert(session *cassandra.Session) {
+func testInsert(session *cassandra.Session) error {
 	// this is just for test purposes
 	// it is recommended to either use a real UUID generator
 	// or the functions available in Cassandra
-	timeUuid, _ := cassandra.ParseUUID("9ecc5dd0-a548-11e5-83b1-dfa924dad615")
-	uuid, _ := cassandra.ParseUUID("f0d07136-62f9-4d18-a6ce-cd5f4beb4348")
-	_, err := session.Execute("INSERT INTO golang_driver (id, u, t) VALUES (?, ?, ?)",
+	timeUuid, _ := cassandra.ParseUUID(timeuuid_)
+	uuid, _ := cassandra.ParseUUID(uuid_)
+	_, err := session.Execute("INSERT INTO golang_driver.uuids (id, u, t) VALUES (?, ?, ?)",
 		timeUuid, uuid, "second")
+
+	return err
+}
+
+func testSelect(t *testing.T, session *cassandra.Session) {
+	rows, err := session.Execute("SELECT id, u, t FROM golang_driver.uuids")
 	if err != nil {
-		fmt.Printf("Insert failed: %s\n", err.Error())
+		t.Fatal(err)
 	}
-}
-
-var setupStmts = []string{
-	"CREATE KEYSPACE IF NOT EXISTS golang_driver WITH replication = {'class': 'SimpleStrategy', 'replication_factor': 1};",
-	"CREATE TABLE golang_driver.uuids (id timeuuid PRIMARY KEY, u uuid, t text)",
-	"INSERT INTO golang_driver.uuids (id, u, txt) VALUES (now(), uuid(), 'first')",
-}
-
-var closeStmts = []string{
-	"DROP KEYSPACE golang_driver",
-}
-
-func setup(session *cassandra.Session) (err error) {
-	for _, stmt := range setupStmts {
-		fmt.Println(stmt)
-		if _, err = session.Execute(stmt); err != nil {
-			return
-		}
-	}
-	return
-}
-
-func tearDown(session *cassandra.Session) (err error) {
-	for _, stmt := range closeStmts {
-		if _, err = session.Execute(stmt); err != nil {
-			return
-		}
-	}
-	return
-}
-
-func ExampleUUIDTypes(session *cassandra.Session) {
-
-	result, err := session.Execute("SELECT t, u FROM golang.typesuuid")
-	if err != nil {
-		fmt.Printf("Error: %s\n", err.Error())
-		return
-	}
-	fmt.Printf("UUIDs results:\n")
-	for result.Next() {
-		var timeUuid cassandra.UUID
-		var uuid cassandra.UUID
-		if err := result.Scan(&timeUuid, &uuid); err != nil {
-			fmt.Printf("Row error: %s\n", err.Error())
+	var uuid, timeuuid cassandra.UUID
+	var txt string
+	for rows.Next() {
+		if err := rows.Scan(&timeuuid, &uuid, &txt); err != nil {
+			t.Error(err)
 			continue
 		}
-		fmt.Printf("TimeUUID: %s (Version: %d)\n", timeUuid.String(), timeUuid.Version())
-		fmt.Printf("UUID    : %s (Version: %d)\n", uuid.String(), uuid.Version())
-	}
-}
-
-// CREATE TABLE IF NOT EXISTS typesb (
-// 	id int PRIMARY KEY,
-// 	b blob,
-// 	i inet
-// );
-func ExampleByteTypes(session *cassandra.Session) {
-	result, err := session.Execute("select b, i from golang.typesb")
-	if err != nil {
-		fmt.Printf("Error: %s\n", err.Error())
-		return
-	}
-
-	fmt.Printf("Byte type results:\n")
-	for result.Next() {
-		var blob []byte
-		var inet net.IP
-		if err := result.Scan(&blob, &inet); err != nil {
-			fmt.Printf("Row error: %s\n", err.Error())
-			continue
+		if timeuuid.Version() != 1 {
+			t.Errorf("timeuuid should be version 1 != %d", timeuuid.Version())
 		}
-		fmt.Printf("Blob: %v\n", blob)
-		fmt.Printf("IP  : %s (%v)\n", inet.String(), inet)
+		if uuid.Version() != 4 {
+			t.Errorf("uuid should be version 4 != %d", uuid.Version())
+		}
+		if txt == "second" {
+			if timeuuid.String() != timeuuid_ {
+				t.Errorf("%s != %s", timeuuid_, timeuuid.String())
+			}
+			if uuid.String() != uuid_ {
+				t.Errorf("%s != %s", uuid_, uuid.String())
+			}
+		}
 	}
-
-	session.Execute("insert into golang.typesb (id, b, i) values (?, ?, ?)",
-		int32(3), []byte("cafe"), net.ParseIP("4.4.4.4"))
 }
 
-// CREATE TABLE IF NOT EXISTS typestime (
-//		id int PRIMARY KEY,
-//		d date,
-//		t time,
-//		ts timestamp
-// );
-// func ExampleTimeTypes(session *cassandra.Session) {
-// 	d := cassandra.NewDate(1920, 8, 23)
-// 	fmt.Printf("Cassandra Date: %s (%d)\n", d.String(), d.Days)
+var (
+	uuidSetup = []string{
+		"CREATE KEYSPACE IF NOT EXISTS golang_driver WITH replication = {'class': 'SimpleStrategy', 'replication_factor': 1};",
+		"CREATE TABLE IF NOT EXISTS golang_driver.uuids (id timeuuid PRIMARY KEY, u uuid, t text)",
+		"INSERT INTO golang_driver.uuids (id, u, t) VALUES (now(), uuid(), 'first')",
+	}
 
-// 	result, err := session.Execute("select d, t, ts  from golang.typestime")
-// 	if err != nil {
-// 		fmt.Printf("ERROR Execute: %s\r\n", err.Error())
-// 		return
-// 	}
-// 	defer result.Close()
-
-// 	for result.Next() {
-// 		var d cassandra.Date
-// 		var t cassandra.Time
-// 		var ts cassandra.Timestamp
-
-// 		if err := result.Scan(&d, &t, &ts); err != nil {
-// 			fmt.Printf("Row error: %s\n", err.Error())
-// 			continue
-// 		}
-// 		fmt.Printf("Date: %s, Time: %d, Timestamp: %d\n", d.String(), t.Nanotime, ts)
-// 	}
-// }
+	uuidCleanup = []string{
+		"DROP TABLE golang_driver.uuids",
+	}
+)

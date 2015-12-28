@@ -8,14 +8,14 @@ import "C"
 import (
 	"errors"
 	"fmt"
+	"net"
 	"reflect"
 	"unsafe"
 )
 
 func read(value *C.CassValue, cassType C.CassValueType, dst interface{}) (bool, error) {
-	fmt.Printf("CVT1: 0x%04X\n", cassType)
+	// fmt.Printf("CVT1: 0x%04X\n", cassType)
 	if isNull(value) && canBeNil(dst) {
-		fmt.Printf("Null value\n")
 		dstVal := reflect.ValueOf(dst)
 		nilVal := reflect.Zero(dstVal.Type().Elem())
 		dstVal.Elem().Set(nilVal)
@@ -34,29 +34,85 @@ func read(value *C.CassValue, cassType C.CassValueType, dst interface{}) (bool, 
 	case CASS_VALUE_TYPE_BIGINT, CASS_VALUE_TYPE_COUNTER, CASS_VALUE_TYPE_INT,
 		CASS_VALUE_TYPE_SMALL_INT, CASS_VALUE_TYPE_TINY_INT:
 		return readInt(value, cassType, dst)
+	case CASS_VALUE_TYPE_VARINT:
+		return readVarint(value, cassType, dst)
+	case CASS_VALUE_TYPE_BLOB:
+		return readBlob(value, cassType, dst)
 	case CASS_VALUE_TYPE_BOOLEAN:
 		return readBool(value, cassType, dst)
-	case CASS_VALUE_TYPE_FLOAT:
-		return readFloat(value, cassType, dst)
+	case CASS_VALUE_TYPE_DECIMAL:
+		return readDecimal(value, cassType, dst)
 	case CASS_VALUE_TYPE_DOUBLE:
 		return readDouble(value, cassType, dst)
+	case CASS_VALUE_TYPE_FLOAT:
+		return readFloat(value, cassType, dst)
+	case CASS_VALUE_TYPE_TIMESTAMP:
+		return readTimestamp(value, cassType, dst)
 	case CASS_VALUE_TYPE_DATE:
 		return readDate(value, cassType, dst)
 	case CASS_VALUE_TYPE_TIME:
 		return readTime(value, cassType, dst)
-	case CASS_VALUE_TYPE_TIMESTAMP:
-		return readTimestamp(value, cassType, dst)
 	case CASS_VALUE_TYPE_UUID, CASS_VALUE_TYPE_TIMEUUID:
 		return readUUID(value, cassType, dst)
+	case CASS_VALUE_TYPE_INET:
+		return readInet(value, cassType, dst)
 	case CASS_VALUE_TYPE_LIST:
 		return readList(value, cassType, dst)
 	case CASS_VALUE_TYPE_SET:
 		return readSet(value, cassType, dst)
 	case CASS_VALUE_TYPE_MAP:
 		return readMap(value, cassType, dst)
+	case CASS_VALUE_TYPE_TUPLE:
+		return readTuple(value, cassType, dst)
+	case CASS_VALUE_TYPE_UDT:
+		return readUDT(value, cassType, dst)
 	}
 	return true, fmt.Errorf("unknown type %s to read into %T",
 		cassTypeName(cassType), dst)
+}
+
+func readBlob(value *C.CassValue, cassType C.CassValueType, dst interface{}) (bool, error) {
+	switch dst := dst.(type) {
+	case *[]byte:
+		if isNull(value) {
+			return false, nil
+		}
+		f, v, err := valAsBlob(value)
+		*dst = v
+		return f, err
+	}
+
+	dstVal := reflect.ValueOf(dst)
+	if dstVal.Kind() != reflect.Ptr {
+		return true, fmt.Errorf("cannot read %s into non-pointer %T",
+			cassTypeName(cassType), dst)
+	}
+	dstVal = dstVal.Elem()
+	if dstVal.Type().Kind() == reflect.Slice && dstVal.Type().Elem().Kind() == reflect.Uint8 {
+		f, v, err := valAsBlob(value)
+		dstVal.SetBytes(v)
+		return f, err
+	}
+
+	return true, fmt.Errorf("cannot read %s type into %T", cassTypeName(cassType),
+		dst)
+}
+
+func valAsBlob(value *C.CassValue) (found bool, b []byte, err error) {
+	var buf *C.cass_byte_t
+	var sz C.size_t
+	retc := C.cass_value_get_bytes(value, &buf, &sz)
+	switch retc {
+	case C.CASS_OK:
+		b = C.GoBytes(unsafe.Pointer(buf), C.int(sz))
+		found = true
+	case C.CASS_ERROR_LIB_NULL_VALUE:
+		found = false
+		return
+	default:
+		err = newError(retc)
+	}
+	return
 }
 
 func readBool(value *C.CassValue, cassType C.CassValueType, dst interface{}) (bool, error) {
@@ -95,8 +151,10 @@ func valAsBool(value *C.CassValue) (found bool, b bool, err error) {
 	case C.CASS_OK:
 		b = cb != 0
 		found = true
+	case C.CASS_ERROR_LIB_NULL_VALUE:
+		found = false
 	default:
-		err = errors.New(C.GoString(C.cass_error_desc(retc)))
+		err = newError(retc)
 	}
 	return
 }
@@ -142,12 +200,10 @@ func valAsString(value *C.CassValue) (found bool, v string, err error) {
 	case C.CASS_OK:
 		v = C.GoStringN(cstr, C.int(csize))
 		found = true
-		return
 	default:
-		err = errors.New(C.GoString(C.cass_error_desc(retc)))
-		return
+		err = newError(retc)
 	}
-
+	return
 }
 
 func readInt(value *C.CassValue, cassType C.CassValueType, dst interface{}) (bool, error) {
@@ -210,7 +266,6 @@ func readInt(value *C.CassValue, cassType C.CassValueType, dst interface{}) (boo
 	}
 	return true, fmt.Errorf("cannot read %s type into %T", cassTypeName(cassType),
 		dst)
-
 }
 
 func valAsInt(value *C.CassValue) (found bool, v int64, err error) {
@@ -221,52 +276,84 @@ func valAsInt(value *C.CassValue) (found bool, v int64, err error) {
 		retc := C.cass_value_get_int8(value, &ival)
 		switch retc {
 		case C.CASS_OK:
-			return true, int64(ival), nil
+			found = true
+			v = int64(ival)
+		case C.CASS_ERROR_LIB_NULL_VALUE:
+			found = false
 		default:
-			return true, 0, errors.New(C.GoString(C.cass_error_desc(retc)))
+			found = true
+			err = newError(retc)
 		}
+		return
 
 	case CASS_VALUE_TYPE_SMALL_INT:
 		var ival C.cass_int16_t
 		retc := C.cass_value_get_int16(value, &ival)
 		switch retc {
 		case C.CASS_OK:
-			return true, int64(ival), nil
+			found = true
+			v = int64(ival)
+		case C.CASS_ERROR_LIB_NULL_VALUE:
+			found = false
 		default:
-			return true, 0, errors.New(C.GoString(C.cass_error_desc(retc)))
+			err = newError(retc)
 		}
+		return
 
 	case CASS_VALUE_TYPE_INT:
 		var ival C.cass_int32_t
 		retc := C.cass_value_get_int32(value, &ival)
 		switch retc {
 		case C.CASS_OK:
-			return true, int64(ival), nil
+			found = true
+			v = int64(ival)
+		case C.CASS_ERROR_LIB_NULL_VALUE:
+			found = false
 		default:
-			return true, 0, errors.New(C.GoString(C.cass_error_desc(retc)))
+			err = newError(retc)
 		}
+		return
 
 	case CASS_VALUE_TYPE_BIGINT, CASS_VALUE_TYPE_TIME, CASS_VALUE_TYPE_TIMESTAMP:
 		var ival C.cass_int64_t
 		retc := C.cass_value_get_int64(value, &ival)
 		switch retc {
 		case C.CASS_OK:
-			return true, int64(ival), nil
+			found = true
+			v = int64(ival)
+		case C.CASS_ERROR_LIB_NULL_VALUE:
+			found = false
 		default:
-			return true, 0, errors.New(C.GoString(C.cass_error_desc(retc)))
+			err = newError(retc)
 		}
+		return
+
 	case CASS_VALUE_TYPE_DATE:
 		var uval C.cass_uint32_t
 		retc := C.cass_value_get_uint32(value, &uval)
 		switch retc {
 		case C.CASS_OK:
-			return true, int64(uval), nil
+			found = true
+			v = int64(uval)
+		case C.CASS_ERROR_LIB_NULL_VALUE:
+			found = false
 		default:
-			return true, 0, errors.New(C.GoString(C.cass_error_desc(retc)))
+			err = newError(retc)
 		}
+		return
 	}
 
 	return true, 0, fmt.Errorf("cannot read %s", cassTypeName(cassType))
+}
+
+func readVarint(value *C.CassValue, cassType C.CassValueType, dst interface{}) (bool, error) {
+	return true, fmt.Errorf("cannot read %s type into %T", cassTypeName(cassType),
+		dst)
+}
+
+func readDecimal(value *C.CassValue, cassType C.CassValueType, dst interface{}) (bool, error) {
+	return true, fmt.Errorf("cannot read %s type into %T", cassTypeName(cassType),
+		dst)
 }
 
 func readFloat(value *C.CassValue, cassType C.CassValueType, dst interface{}) (bool, error) {
@@ -347,10 +434,13 @@ func valAsFloat(value *C.CassValue) (found bool, v float64, err error) {
 		case C.CASS_OK:
 			found = true
 			v = float64(f32)
-			return
+		case C.CASS_ERROR_LIB_NULL_VALUE:
+			found = false
 		default:
-			return true, 0, errors.New(C.GoString(C.cass_error_desc(retc)))
+			err = newError(retc)
 		}
+		return
+
 	case CASS_VALUE_TYPE_DOUBLE:
 		var f64 C.cass_double_t
 		retc := C.cass_value_get_double(value, &f64)
@@ -358,10 +448,12 @@ func valAsFloat(value *C.CassValue) (found bool, v float64, err error) {
 		case C.CASS_OK:
 			found = true
 			v = float64(f64)
-			return
+		case C.CASS_ERROR_LIB_NULL_VALUE:
+			found = false
 		default:
-			return true, 0, errors.New(C.GoString(C.cass_error_desc(retc)))
+			err = newError(retc)
 		}
+		return
 	}
 	return true, 0, fmt.Errorf("cannot read %s", cassTypeName(cassType))
 }
@@ -519,6 +611,33 @@ func readTimestamp(value *C.CassValue, cassType C.CassValueType, dst interface{}
 		dst)
 }
 
+func readInet(value *C.CassValue, cassType C.CassValueType, dst interface{}) (bool, error) {
+	switch dst := dst.(type) {
+	case *net.IP:
+		if isNull(value) {
+			return false, nil
+		}
+		var inet C.struct_CassInet_
+		retc := C.cass_value_get_inet(value, &inet)
+		switch retc {
+		case C.CASS_OK:
+			sz := int(inet.address_length)
+			ip := make([]byte, sz)
+			for i := 0; i < sz; i++ {
+				ip[i] = byte(inet.address[i])
+			}
+			*dst = net.IP(ip)
+			return true, nil
+		case C.CASS_ERROR_LIB_NULL_VALUE:
+			return false, nil
+		default:
+			return true, errors.New(C.GoString(C.cass_error_desc(retc)))
+		}
+	}
+	return true, fmt.Errorf("cannot read %s type into %T", cassTypeName(cassType),
+		dst)
+}
+
 func readList(value *C.CassValue, cassType C.CassValueType, dst interface{}) (bool, error) {
 	dstVal := reflect.ValueOf(dst)
 	if dstVal.Kind() != reflect.Ptr {
@@ -588,7 +707,6 @@ func readMap(value *C.CassValue, cassType C.CassValueType, dst interface{}) (boo
 	for b != 0 {
 		key := reflect.New(t.Key())
 		keyValue := C.cass_iterator_get_map_key(colIter)
-		fmt.Printf("Key: %v, Val: %v\n", key, keyValue)
 		keyType := C.cass_value_type(keyValue)
 
 		if _, err := read(keyValue, keyType, key.Interface()); err != nil {
@@ -628,7 +746,7 @@ func readSet(value *C.CassValue, cassType C.CassValueType, dst interface{}) (boo
 	dstVal.Set(reflect.MakeMap(t))
 	inSet := true
 	trueVal := reflect.ValueOf(&inSet)
-	// val.SetBool(true)
+
 	colIter := C.cass_iterator_from_collection(value)
 	defer C.cass_iterator_free(colIter)
 
@@ -648,6 +766,16 @@ func readSet(value *C.CassValue, cassType C.CassValueType, dst interface{}) (boo
 	return true, nil
 }
 
+func readTuple(value *C.CassValue, cassType C.CassValueType, dst interface{}) (bool, error) {
+	return true, fmt.Errorf("cannot read %s type into %T", cassTypeName(cassType),
+		dst)
+}
+
+func readUDT(value *C.CassValue, cassType C.CassValueType, dst interface{}) (bool, error) {
+	return true, fmt.Errorf("cannot read %s type into %T", cassTypeName(cassType),
+		dst)
+}
+
 func isNull(value *C.CassValue) bool {
 	return bool(C.cass_value_is_null(value) != 0)
 }
@@ -655,11 +783,11 @@ func isNull(value *C.CassValue) bool {
 func canBeNil(dst interface{}) bool {
 	v := reflect.ValueOf(dst)
 	r := v.Kind() == reflect.Ptr && v.Type().Elem().Kind() == reflect.Ptr
-	fmt.Printf("canBeNil(%s, kind: %s, etype: %s, ekind: %s): %t\n",
-		v.Type().String(),
-		v.Kind().String(),
-		v.Type().Elem().String(),
-		v.Type().Elem().Kind().String(),
-		r)
+	// fmt.Printf("canBeNil(%s, kind: %s, etype: %s, ekind: %s): %t\n",
+	// 	v.Type().String(),
+	// 	v.Kind().String(),
+	// 	v.Type().Elem().String(),
+	// 	v.Type().Elem().Kind().String(),
+	// 	r)
 	return r
 }

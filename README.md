@@ -54,16 +54,18 @@ func main() {
 }
 ```
 
+See the tests in the main package for more examples.
+
 ### What is supposed to work
 
 1. Connecting to a cluster (sort of minimal expectation), but missing all the advanced configuration
    options.
 2. A range of basic Cassandra types, including also the new ones introduced in
-   version 2.2 (tinyint, smallint, date, time, timestamp). Missing all the
-   collection types <del>and uuids</del>.
+   version 2.2 (tinyint, smallint, date, time, timestamp). 
 
-   * There's basic support for UUID and TimeUUID, but it needs more testing and
-       validation of the API.
+   * There are a couple of missing data types (see below).
+   * Collections can only be read and not written
+   * There's no support yet for UDTs
 
 3. Executing simple statements:
 
@@ -85,7 +87,15 @@ _The list of remaining todos is currently longer than the above one._
 * [X] Advanced cluster configuration
 * [ ] Missing C* types: `decimal`, `varint`
 * [ ] Async API
+* [X] Support for reading collections
 * [ ] Support for collections
 * [ ] Support for tuples
 * [ ] Support for UDTs
 * [ ] Named parameters
+
+## Credits
+
+* [go.uuid](https://github.com/satori/go.uuid) and [uuid](https://github.com/pborman/uuid) for inspiration on dealing with UUIDs
+* [gocql](https://github.com/gocql/gocql) for teaching me a lot about Go
+    `reflect`
+* countless people on #go-nuts and Twitter
