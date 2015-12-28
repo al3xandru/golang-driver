@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"reflect"
+	"unsafe"
 )
 
 func read(value *C.CassValue, cassType C.CassValueType, dst interface{}) (bool, error) {
@@ -45,6 +46,8 @@ func read(value *C.CassValue, cassType C.CassValueType, dst interface{}) (bool, 
 		return readTime(value, cassType, dst)
 	case CASS_VALUE_TYPE_TIMESTAMP:
 		return readTimestamp(value, cassType, dst)
+	case CASS_VALUE_TYPE_UUID, CASS_VALUE_TYPE_TIMEUUID:
+		return readUUID(value, cassType, dst)
 	case CASS_VALUE_TYPE_LIST:
 		return readList(value, cassType, dst)
 	case CASS_VALUE_TYPE_SET:
@@ -363,6 +366,36 @@ func valAsFloat(value *C.CassValue) (found bool, v float64, err error) {
 	return true, 0, fmt.Errorf("cannot read %s", cassTypeName(cassType))
 }
 
+func readUUID(value *C.CassValue, cassType C.CassValueType, dst interface{}) (bool, error) {
+	switch dst := dst.(type) {
+	case *UUID:
+		if isNull(value) {
+			return false, nil
+		}
+		var cuuid C.struct_CassUuid_
+		retc := C.cass_value_get_uuid(value, &cuuid)
+		switch retc {
+		case C.CASS_OK:
+			buf := (*C.char)(C.malloc(C.CASS_UUID_STRING_LENGTH))
+			defer C.free(unsafe.Pointer(buf))
+
+			C.cass_uuid_string(cuuid, buf)
+			suuid := C.GoString(buf)
+
+			uuid, err := ParseUUID(suuid)
+			if err != nil {
+				return true, err
+			}
+			*dst = uuid
+			return true, nil
+		default:
+			return true, errors.New(C.GoString(C.cass_error_desc(retc)))
+		}
+	}
+	return true, fmt.Errorf("cannot read %s type into %T", cassTypeName(cassType),
+		dst)
+}
+
 func readTime(value *C.CassValue, cassType C.CassValueType, dst interface{}) (bool, error) {
 	switch dst := dst.(type) {
 	case *Time:
@@ -593,28 +626,23 @@ func readSet(value *C.CassValue, cassType C.CassValueType, dst interface{}) (boo
 	}
 	t := dstVal.Type()
 	dstVal.Set(reflect.MakeMap(t))
+	inSet := true
+	trueVal := reflect.ValueOf(&inSet)
+	// val.SetBool(true)
 	colIter := C.cass_iterator_from_collection(value)
 	defer C.cass_iterator_free(colIter)
 
 	b := C.cass_iterator_next(colIter)
 	for b != 0 {
 		key := reflect.New(t.Key())
-		keyValue := C.cass_iterator_get_map_key(colIter)
+		keyValue := C.cass_iterator_get_value(colIter)
 		keyType := C.cass_value_type(keyValue)
 
 		if _, err := read(keyValue, keyType, key.Interface()); err != nil {
 			return true, err
 		}
 
-		val := reflect.New(t.Elem())
-		valValue := C.cass_iterator_get_map_value(colIter)
-		valType := C.cass_value_type(valValue)
-
-		if _, err := read(valValue, valType, val.Interface()); err != nil {
-			return true, err
-		}
-
-		dstVal.SetMapIndex(key.Elem(), val.Elem())
+		dstVal.SetMapIndex(key.Elem(), trueVal.Elem())
 		b = C.cass_iterator_next(colIter)
 	}
 	return true, nil
