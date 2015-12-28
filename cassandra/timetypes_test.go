@@ -118,7 +118,7 @@ func TestTimeTypes(t *testing.T) {
 		if tAsInt64 != 48547234000000 {
 			t.Errorf("Time 13:29:07.234 (48547234000000) != %d", tAsInt64)
 		}
-		if tsAsInt64 != 47234000000 {
+		if tsAsInt64 != 1450606299 {
 			t.Errorf("Timestamp 47234000000 != %d", tsAsInt64)
 		}
 	}
