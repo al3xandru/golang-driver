@@ -47,6 +47,8 @@ func read(value *C.CassValue, cassType C.CassValueType, dst interface{}) (bool, 
 		return readTimestamp(value, cassType, dst)
 	case CASS_VALUE_TYPE_LIST:
 		return readList(value, cassType, dst)
+	case CASS_VALUE_TYPE_SET:
+		return readSet(value, cassType, dst)
 	case CASS_VALUE_TYPE_MAP:
 		return readMap(value, cassType, dst)
 	}
@@ -530,6 +532,51 @@ func size(value *C.CassValue) int {
 }
 
 func readMap(value *C.CassValue, cassType C.CassValueType, dst interface{}) (bool, error) {
+	dstVal := reflect.ValueOf(dst)
+	if dstVal.Kind() != reflect.Ptr {
+		return true, fmt.Errorf("cannot read %s into non-pointer %T",
+			cassTypeName(cassType), dst)
+	}
+	dstVal = dstVal.Elem()
+	if dstVal.Type().Kind() != reflect.Map {
+		return true, fmt.Errorf("cannot read %s into non-pointer %T",
+			cassTypeName(cassType), dst)
+	}
+	if isNull(value) {
+		dstVal.Set(reflect.Zero(dstVal.Type()))
+		return false, nil
+	}
+	t := dstVal.Type()
+	dstVal.Set(reflect.MakeMap(t))
+	colIter := C.cass_iterator_from_map(value)
+	defer C.cass_iterator_free(colIter)
+
+	b := C.cass_iterator_next(colIter)
+	for b != 0 {
+		key := reflect.New(t.Key())
+		keyValue := C.cass_iterator_get_map_key(colIter)
+		fmt.Printf("Key: %v, Val: %v\n", key, keyValue)
+		keyType := C.cass_value_type(keyValue)
+
+		if _, err := read(keyValue, keyType, key.Interface()); err != nil {
+			return true, err
+		}
+
+		val := reflect.New(t.Elem())
+		valValue := C.cass_iterator_get_map_value(colIter)
+		valType := C.cass_value_type(valValue)
+
+		if _, err := read(valValue, valType, val.Interface()); err != nil {
+			return true, err
+		}
+
+		dstVal.SetMapIndex(key.Elem(), val.Elem())
+		b = C.cass_iterator_next(colIter)
+	}
+	return true, nil
+}
+
+func readSet(value *C.CassValue, cassType C.CassValueType, dst interface{}) (bool, error) {
 	dstVal := reflect.ValueOf(dst)
 	if dstVal.Kind() != reflect.Ptr {
 		return true, fmt.Errorf("cannot read %s into non-pointer %T",
