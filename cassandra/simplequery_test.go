@@ -17,7 +17,7 @@ func TestSimpleQueries(t *testing.T) {
 }
 
 func executeSimpleQuery(session *cassandra.Session, t *testing.T) {
-	rows, err := session.Execute("select keyspace_name from system.schema_keyspaces")
+	rows, err := session.Exec("select keyspace_name from system.schema_keyspaces")
 	if err != nil {
 		t.Error(err)
 		return
@@ -29,7 +29,7 @@ func executeSimpleQuery(session *cassandra.Session, t *testing.T) {
 }
 
 func executeSimpleQueryWithParams(session *cassandra.Session, t *testing.T) {
-	rows, err := session.Execute("select columnfamily_name from system.schema_columnfamilies where keyspace_name = ?",
+	rows, err := session.Exec("select columnfamily_name from system.schema_columnfamilies where keyspace_name = ?",
 		"system")
 	if err != nil {
 		t.Error(err)

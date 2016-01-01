@@ -28,14 +28,7 @@ func executePreparedStatement(session *cassandra.Session,
 	param string,
 	t *testing.T) {
 
-	stmt, err := pstmt.Bind(param)
-	if err != nil {
-		t.Error(err)
-		return
-	}
-	defer stmt.Close()
-
-	rows, err := session.Exec(stmt)
+	rows, err := pstmt.Exec(param)
 	if err != nil {
 		t.Error(err)
 		return

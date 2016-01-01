@@ -17,7 +17,7 @@ func TestLists(t *testing.T) {
 	}
 	defer test.TearDown(colCleanup)
 
-	rows, err := session.Execute("SELECT intlist, textlist, datelist FROM golang_driver.listtypes")
+	rows, err := session.Exec("SELECT intlist, textlist, datelist FROM golang_driver.listtypes")
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -17,7 +17,7 @@ func TestSets(t *testing.T) {
 	}
 	defer test.TearDown(setsCleanup)
 
-	rows, err := session.Execute("SELECT s FROM golang_driver.sets")
+	rows, err := session.Exec("SELECT s FROM golang_driver.sets")
 	if err != nil {
 		t.Fatal(err)
 	}

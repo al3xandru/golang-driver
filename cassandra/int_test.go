@@ -21,7 +21,7 @@ func TestIntTypes(t *testing.T) {
 }
 
 func testReadValues(t *testing.T, session *cassandra.Session) {
-	rows, err := session.Execute("SELECT bgnt, nt, smllnt, tnnt, nt FROM golang_driver.ints WHERE id = 1")
+	rows, err := session.Exec("SELECT bgnt, nt, smllnt, tnnt, nt FROM golang_driver.ints WHERE id = 1")
 	if err != nil {
 		t.Error(err)
 		return
@@ -62,7 +62,7 @@ func testReadValues(t *testing.T, session *cassandra.Session) {
 }
 
 func testMissingValues(t *testing.T, session *cassandra.Session) {
-	rows, err := session.Execute("SELECT bgnt, nt, smllnt, tnnt, nt FROM golang_driver.ints WHERE id = 2")
+	rows, err := session.Exec("SELECT bgnt, nt, smllnt, tnnt, nt FROM golang_driver.ints WHERE id = 2")
 	if err != nil {
 		t.Error(err)
 		return

@@ -8,6 +8,9 @@ on the work of Matt Stump's
 [golang-driver](https://github.com/mstump/golang-driver) and uses the version
 2.2 of the [DataStax C/C++ driver for Cassandra](https://github.com/datastax/cpp-driver).
 
+I really appreciate feedback about what's currently supported, the internals,
+and what features might be useful for you.
+
 ### Build
 
 1. [Build](http://datastax.github.io/cpp-driver/topics/building/) and install the DataStax [C/C++ driver](https://github.com/datastax/cpp-driver)
@@ -35,7 +38,7 @@ func main() {
 	}
 	defer session.Close()
 
-	result, err := session.Execute("select keyspace_name from system.schema_keyspaces")
+	result, err := session.Exec("select keyspace_name from system.schema_keyspaces")
 	if err != nil {
 		fmt.Printf("Error executing: %s\n", err.Error())
 		return
@@ -69,10 +72,30 @@ See the tests in the main package for more examples.
 
 3. Executing simple statements:
 
+    ```go
+    session.Exec("select * from table where pk = ?", pk_value)
     ```
-    session.Execute("select * from table where pk = ?", pk_value)
+
+4. Executing simple statements with non-default consistency settings:
+
+    ```go
+    session.Query("select * from table where pk = ?", pk_value).
+            WithConsistency(ANY).
+            Exec()
     ```
-4. Executing prepared statements
+
+5. Executing prepared statements:
+
+    ```go
+    pstmt := session.Prepare("select * from table where pk = ?")
+    pstmt.SetConsistency(ANY)
+    for key := range keys {
+        pstmt.Exec(key)
+    }
+    ```
+
+6. Even if the underlying implementation uses async calls, the exposed async API
+   is minimal for now until the main API is further tested.
 
 _The list of remaining todos is currently longer than the above one._
 

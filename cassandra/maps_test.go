@@ -18,7 +18,7 @@ func TestMaps(t *testing.T) {
 	}
 	defer test.TearDown(mapCleanup)
 
-	rows, err := session.Execute("SELECT m FROM golang_driver.maps")
+	rows, err := session.Exec("SELECT m FROM golang_driver.maps")
 	if err != nil {
 		t.Fatal(err)
 	}

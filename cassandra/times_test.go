@@ -82,7 +82,7 @@ func TestTimeTypes(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer test.TearDown(timetypesCleanup)
-	rows, err := session.Execute("SELECT td, tt, ts FROM golang_driver.timetypes")
+	rows, err := session.Exec("SELECT td, tt, ts FROM golang_driver.timetypes")
 	if err != nil {
 		t.Fatal(err)
 	}

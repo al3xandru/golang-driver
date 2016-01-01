@@ -64,7 +64,7 @@ func IterateRows(rows *cassandra.Rows, t *testing.T) {
 func Setup(statements []string) (err error) {
 	for _, stmt := range statements {
 		fmt.Println(stmt)
-		if _, err = DB.session.Execute(stmt); err != nil {
+		if _, err = DB.session.Exec(stmt); err != nil {
 			return
 		}
 	}
@@ -73,7 +73,7 @@ func Setup(statements []string) (err error) {
 
 func TearDown(statements []string) {
 	for _, stmt := range statements {
-		if _, err := DB.session.Execute(stmt); err != nil {
+		if _, err := DB.session.Exec(stmt); err != nil {
 			fmt.Printf("%s executing closing statement '%s'\n", err.Error(), stmt)
 		}
 	}

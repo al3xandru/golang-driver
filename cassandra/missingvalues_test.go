@@ -16,7 +16,7 @@ func TestMissingValues(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer test.TearDown(alltypesCleanup)
-	rows, err := session.Execute("SELECT a, txt, vchr, bol, bigi, ii, smalli, tinyi, dbl, flt, ip, tuid, uid, blb, tm, ts, td FROM golang_driver.alltypes")
+	rows, err := session.Exec("SELECT a, txt, vchr, bol, bigi, ii, smalli, tinyi, dbl, flt, ip, tuid, uid, blb, tm, ts, td FROM golang_driver.alltypes")
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -12,7 +12,7 @@ import (
 // 	i inet
 // );
 func ExampleByteTypes(session *cassandra.Session) {
-	result, err := session.Execute("select b, i from golang.typesb")
+	result, err := session.Exec("select b, i from golang.typesb")
 	if err != nil {
 		fmt.Printf("Error: %s\n", err.Error())
 		return
@@ -30,6 +30,6 @@ func ExampleByteTypes(session *cassandra.Session) {
 		fmt.Printf("IP  : %s (%v)\n", inet.String(), inet)
 	}
 
-	session.Execute("insert into golang.typesb (id, b, i) values (?, ?, ?)",
+	session.Exec("insert into golang.typesb (id, b, i) values (?, ?, ?)",
 		int32(3), []byte("cafe"), net.ParseIP("4.4.4.4"))
 }

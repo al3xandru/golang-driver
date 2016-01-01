@@ -21,7 +21,7 @@ func TestFloatTypes(t *testing.T) {
 }
 
 func testReadFloats(t *testing.T, session *cassandra.Session) {
-	rows, err := session.Execute("SELECT flt, dbl FROM golang_driver.floats WHERE id = 1")
+	rows, err := session.Exec("SELECT flt, dbl FROM golang_driver.floats WHERE id = 1")
 	if err != nil {
 		t.Error(err)
 		return
@@ -48,7 +48,7 @@ func testReadFloats(t *testing.T, session *cassandra.Session) {
 }
 
 func testMissingFloats(t *testing.T, session *cassandra.Session) {
-	rows, err := session.Execute("SELECT flt, dbl FROM golang_driver.floats WHERE id = 2")
+	rows, err := session.Exec("SELECT flt, dbl FROM golang_driver.floats WHERE id = 2")
 	if err != nil {
 		t.Error(err)
 		return

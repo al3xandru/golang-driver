@@ -34,14 +34,14 @@ func testInsert(session *cassandra.Session) error {
 	// or the functions available in Cassandra
 	timeUuid, _ := cassandra.ParseUUID(timeuuid_)
 	uuid, _ := cassandra.ParseUUID(uuid_)
-	_, err := session.Execute("INSERT INTO golang_driver.uuids (id, u, t) VALUES (?, ?, ?)",
+	_, err := session.Exec("INSERT INTO golang_driver.uuids (id, u, t) VALUES (?, ?, ?)",
 		timeUuid, uuid, "second")
 
 	return err
 }
 
 func testSelect(t *testing.T, session *cassandra.Session) {
-	rows, err := session.Execute("SELECT id, u, t FROM golang_driver.uuids")
+	rows, err := session.Exec("SELECT id, u, t FROM golang_driver.uuids")
 	if err != nil {
 		t.Fatal(err)
 	}

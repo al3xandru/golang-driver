@@ -24,30 +24,19 @@ func (session *Session) Close() {
 	session.Cluster = nil
 }
 
-func (session *Session) Execute(query string, args ...interface{}) (*Rows, error) {
-	stmt := newSimpleStatement(query, len(args))
+func (session *Session) Exec(query string, args ...interface{}) (*Rows, error) {
+	stmt := newSimpleStatement(session, query, len(args))
 	defer stmt.Close()
 
 	stmt.bind(args...)
-	return session.Exec(stmt)
+	return stmt.Exec()
 }
 
-func (session *Session) Exec(stmt *Statement) (*Rows, error) {
-	future := session.ExecAsync(stmt)
-	defer future.Close()
+func (session *Session) Query(query string, args ...interface{}) *Statement {
+	stmt := newSimpleStatement(session, query, len(args))
+	stmt.Args = args
 
-	if err := future.Error(); err != nil {
-		fmt.Printf("Execute: %s\r\n", err.Error())
-		return nil, err
-	}
-	future.Wait()
-	return future.Result(), nil
-}
-
-func (session *Session) ExecAsync(stmt *Statement) *Future {
-	return async(func() *C.struct_CassFuture_ {
-		return C.cass_session_execute(session.cptr, stmt.cptr)
-	})
+	return stmt
 }
 
 func (session *Session) Prepare(query string) (*PreparedStatement, error) {
@@ -66,12 +55,73 @@ func (session *Session) Prepare(query string) (*PreparedStatement, error) {
 
 	pstmt := new(PreparedStatement)
 	pstmt.cptr = C.cass_future_get_prepared(future.cptr)
+	pstmt.session = session
+	pstmt.consistency = unset
+	pstmt.serialConsistency = unset
 
 	return pstmt, nil
 }
 
+type Consistency int
+
+const (
+	unset Consistency = 1 << iota
+	ANY
+	ONE
+	TWO
+	THREE
+	QUORUM
+	ALL
+	LOCAL_QUORUM
+	EACH_QUORUM
+	// Serial Consistency
+	SERIAL
+	LOCAL_SERIAL
+	LOCAL_ONE
+)
+
+func (c Consistency) toC() C.CassConsistency {
+	switch c {
+	case ANY:
+		return C.CassConsistency(C.CASS_CONSISTENCY_ANY)
+	case ONE:
+		return C.CassConsistency(C.CASS_CONSISTENCY_ONE)
+	case TWO:
+		return C.CassConsistency(C.CASS_CONSISTENCY_TWO)
+	case THREE:
+		return C.CassConsistency(C.CASS_CONSISTENCY_THREE)
+	case QUORUM:
+		return C.CassConsistency(C.CASS_CONSISTENCY_QUORUM)
+	case ALL:
+		return C.CassConsistency(C.CASS_CONSISTENCY_ALL)
+	case LOCAL_QUORUM:
+		return C.CassConsistency(C.CASS_CONSISTENCY_LOCAL_QUORUM)
+	case EACH_QUORUM:
+		return C.CassConsistency(C.CASS_CONSISTENCY_EACH_QUORUM)
+	case SERIAL:
+		return C.CassConsistency(C.CASS_CONSISTENCY_SERIAL)
+	case LOCAL_SERIAL:
+		return C.CassConsistency(C.CASS_CONSISTENCY_LOCAL_SERIAL)
+	case LOCAL_ONE:
+		return C.CassConsistency(C.CASS_CONSISTENCY_LOCAL_ONE)
+	}
+	return C.CassConsistency(C.CASS_CONSISTENCY_UNKNOWN)
+}
+
 type PreparedStatement struct {
-	cptr *C.struct_CassPrepared_
+	cptr              *C.struct_CassPrepared_
+	session           *Session
+	consistency       Consistency
+	serialConsistency Consistency
+	pagingSize        int
+}
+
+func (pstmt *PreparedStatement) SetConsistency(c Consistency) {
+	pstmt.consistency = c
+}
+
+func (pstmt *PreparedStatement) SetSerialConsistency(c Consistency) {
+	pstmt.serialConsistency = c
 }
 
 func (pstmt *PreparedStatement) Close() {
@@ -79,17 +129,38 @@ func (pstmt *PreparedStatement) Close() {
 	pstmt.cptr = nil
 }
 
-func (pstmt *PreparedStatement) Bind(args ...interface{}) (*Statement, error) {
+func (pstmt *PreparedStatement) Exec(args ...interface{}) (*Rows, error) {
+	future := pstmt.ExecAsync(args...)
+	defer future.Close()
+
+	if err := future.Error(); err != nil {
+		return nil, err
+	}
+
+	return future.Result(), nil
+}
+
+func (pstmt *PreparedStatement) ExecAsync(args ...interface{}) *Future {
 	stmt := newBoundStatement(pstmt)
-	err := stmt.bind(args...)
-	return stmt, err
+	stmt.Args = args
+	stmt.WithConsistency(pstmt.consistency)
+	stmt.WithSerialConsistency(pstmt.serialConsistency)
+
+	defer stmt.Close()
+
+	return stmt.ExecAsync()
 }
 
 type Future struct {
 	cptr *C.struct_CassFuture_
+	err  error
 }
 
 func (future *Future) Error() error {
+	// shortcircuit if an error has already been set
+	if future.err != nil {
+		return future.err
+	}
 	if C.cass_future_error_code(future.cptr) == C.CASS_OK {
 		return nil
 	}
@@ -101,14 +172,10 @@ func (future *Future) Error() error {
 }
 
 func (future *Future) Result() *Rows {
-	result := new(Rows)
-	result.cptr = C.cass_future_get_result(future.cptr)
-	return result
+	rows := new(Rows)
+	rows.cptr = C.cass_future_get_result(future.cptr)
+	return rows
 }
-
-// func (future *Future) Ready() bool {
-// 	return C.cass_future_ready(future.cptr) == C.cass_true
-// }
 
 func (future *Future) Wait() {
 	C.cass_future_wait(future.cptr)
@@ -119,6 +186,9 @@ func (future *Future) WaitTimed(timeout uint64) bool {
 }
 
 func (future *Future) Close() {
+	if future.err != nil {
+		return
+	}
 	C.cass_future_free(future.cptr)
 	future.cptr = nil
 }
@@ -133,53 +203,49 @@ func (r *Rows) Err() error {
 	return r.err
 }
 
-func (result *Rows) Close() {
-	C.cass_result_free(result.cptr)
-	result.cptr = nil
+func (rows *Rows) Close() {
+	C.cass_result_free(rows.cptr)
+	rows.cptr = nil
 }
 
-// func (result *Rows) RowCount() uint64 {
-// 	return uint64(C.cass_result_row_count(result.cptr))
-// }
-
-func (result *Rows) ColumnCount() uint64 {
-	return uint64(C.cass_result_column_count(result.cptr))
+func (rows *Rows) ColumnCount() uint64 {
+	return uint64(C.cass_result_column_count(rows.cptr))
 }
 
-func (result *Rows) ColumnName(index int) string {
+func (rows *Rows) ColumnName(index int) string {
 	var cStr *C.char
 	var size C.size_t
-	retc := C.cass_result_column_name(result.cptr, C.size_t(index), &cStr, &size)
+	retc := C.cass_result_column_name(rows.cptr, C.size_t(index), &cStr, &size)
 	if retc == C.CASS_OK {
 		return C.GoStringN(cStr, C.int(size))
 	}
 	return "UNKNOWN"
 }
 
-func (result *Rows) ColumnType(index int) string {
-	return cassTypeName(C.cass_result_column_type(result.cptr, C.size_t(index)))
+func (rows *Rows) ColumnType(index int) string {
+	return cassTypeName(C.cass_result_column_type(rows.cptr, C.size_t(index)))
 }
 
-func (result *Rows) Next() bool {
-	if result.iter == nil {
-		result.iter = C.cass_iterator_from_result(result.cptr)
+func (rows *Rows) Next() bool {
+	if rows.iter == nil {
+		rows.iter = C.cass_iterator_from_result(rows.cptr)
 	}
-	return C.cass_iterator_next(result.iter) != 0
+	return C.cass_iterator_next(rows.iter) != 0
 }
 
-func (result *Rows) Scan(args ...interface{}) error {
-	if result.ColumnCount() < uint64(len(args)) {
+func (rows *Rows) Scan(args ...interface{}) error {
+	if rows.ColumnCount() < uint64(len(args)) {
 		return errors.New("invalid argument count")
 	}
 
-	row := C.cass_iterator_get_row(result.iter)
+	row := C.cass_iterator_get_row(rows.iter)
 
 	for i, v := range args {
 		value := C.cass_row_get_column(row, C.size_t(i))
-		casst := C.cass_result_column_type(result.cptr, C.size_t(i))
+		casst := C.cass_result_column_type(rows.cptr, C.size_t(i))
 
 		if _, err := read(value, casst, v); err != nil {
-			return newColumnError(result, i, v, err)
+			return newColumnError(rows, i, v, err)
 		}
 	}
 
@@ -298,5 +364,5 @@ type statement struct {
 
 func async(f func() *C.struct_CassFuture_) *Future {
 	ptrFuture := f()
-	return &Future{ptrFuture}
+	return &Future{cptr: ptrFuture}
 }
