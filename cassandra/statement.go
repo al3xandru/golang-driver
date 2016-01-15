@@ -6,15 +6,14 @@ package cassandra
 // #include <cassandra.h>
 import "C"
 import (
-	"errors"
 	"fmt"
-	"net"
 	"unsafe"
 )
 
 type Statement struct {
 	cptr              *C.struct_CassStatement_
 	session           *Session
+	pstmt             *PreparedStatement
 	consistency       Consistency
 	serialConsistency Consistency
 	Args              []interface{}
@@ -74,69 +73,35 @@ func (stmt *Statement) ExecAsync() *Future {
 	})
 }
 
-// TODO: uuid, timeuuid, inet, []byte, decimal, collections, tuple, udt
 func (stmt *Statement) bind(args ...interface{}) error {
-	var cerr C.CassError = C.CASS_OK
-
 	for i, v := range args {
-		switch v := v.(type) {
-		case bool:
-			var val byte = 0
-			if v {
-				val = 1
-			}
-			cerr = C.cass_statement_bind_bool(stmt.cptr, C.size_t(i), C.cass_bool_t(val))
-		case float32:
-			cerr = C.cass_statement_bind_float(stmt.cptr, C.size_t(i), C.cass_float_t(v))
-		case float64:
-			cerr = C.cass_statement_bind_double(stmt.cptr, C.size_t(i), C.cass_double_t(v))
-		case int8:
-			cerr = C.cass_statement_bind_int8(stmt.cptr, C.size_t(i), C.cass_int8_t(v))
-		case int16:
-			cerr = C.cass_statement_bind_int16(stmt.cptr, C.size_t(i), C.cass_int16_t(v))
-		case int32:
-			cerr = C.cass_statement_bind_int32(stmt.cptr, C.size_t(i), C.cass_int32_t(v))
-		case int64:
-			cerr = C.cass_statement_bind_int64(stmt.cptr, C.size_t(i), C.cass_int64_t(v))
-		case nil:
-			cerr = C.cass_statement_bind_null(stmt.cptr, C.size_t(i))
-		case uint32:
-			cerr = C.cass_statement_bind_uint32(stmt.cptr, C.size_t(i), C.cass_uint32_t(v))
-		case UUID:
-			cStr := C.CString(v.String())
-			defer C.free(unsafe.Pointer(cStr))
-			var cUuid C.CassUuid
-			retc := C.cass_uuid_from_string(cStr, &cUuid)
-			if retc == C.CASS_OK {
-				cerr = C.cass_statement_bind_uuid(stmt.cptr, C.size_t(i), cUuid)
-			}
-		case Date:
-			cerr = C.cass_statement_bind_uint32(stmt.cptr, C.size_t(i), C.cass_uint32_t(v.Days))
-		case Time:
-			cerr = C.cass_statement_bind_int64(stmt.cptr, C.size_t(i), C.cass_int64_t(v))
-		case Timestamp:
-			cerr = C.cass_statement_bind_int64(stmt.cptr, C.size_t(i), C.cass_int64_t(v.SecondsSinceEpoch))
-		case string:
-			cStr := C.CString(v)
-			defer C.free(unsafe.Pointer(cStr))
-			cerr = C.cass_statement_bind_string(stmt.cptr, C.size_t(i), cStr)
-		case []byte:
-			cerr = C.cass_statement_bind_bytes(stmt.cptr, C.size_t(i),
-				(*C.cass_byte_t)(unsafe.Pointer(&v)), C.size_t(len(v)))
-		case net.IP:
-			b := []byte(v)
-			var cInet C.struct_CassInet_
-			cInet.address_length = C.cass_uint8_t(len(b))
-			for j, _ := range b {
-				cInet.address[j] = C.cass_uint8_t(b[j])
-			}
-			cerr = C.cass_statement_bind_inet(stmt.cptr, C.size_t(i), cInet)
+		if err := write(stmt, v, i, stmt.dataType(i)); err != nil {
+			return err
 		}
 	}
-	if cerr != C.CASS_OK {
-		return errors.New(C.GoString(C.cass_error_desc(cerr)))
-	}
 	return nil
+}
+
+type cassDataType *C.struct_CassDataType_
+
+func valueType(cdt cassDataType) C.CassValueType {
+	if cdt == nil {
+		return CASS_VALUE_TYPE_UNKNOWN
+	}
+
+	return C.cass_data_type_type(cdt)
+}
+
+func (stmt *Statement) dataType(index int) cassDataType {
+	if stmt.pstmt == nil {
+		return nil
+	}
+	return cassDataType(C.cass_prepared_parameter_data_type(stmt.pstmt.cptr, C.size_t(index)))
+	// cassDataType := C.cass_prepared_parameter_data_type(stmt.pstmt.cptr, C.size_t(index))
+	// if cassDataType == nil {
+	// 	return CASS_VALUE_TYPE_UNKNOWN
+	// }
+	// return C.cass_data_type_type(cassDataType)
 }
 
 func newSimpleStatement(session *Session, query string, paramLen int) *Statement {
@@ -155,6 +120,7 @@ func newSimpleStatement(session *Session, query string, paramLen int) *Statement
 func newBoundStatement(pstmt *PreparedStatement) *Statement {
 	stmt := new(Statement)
 	stmt.cptr = C.cass_prepared_bind(pstmt.cptr)
+	stmt.pstmt = pstmt
 	stmt.session = pstmt.session
 	stmt.consistency = unset
 	stmt.serialConsistency = unset

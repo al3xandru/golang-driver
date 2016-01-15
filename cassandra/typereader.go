@@ -651,7 +651,8 @@ func readList(value *C.CassValue, cassType C.CassValueType, dst interface{}) (bo
 			dstVal.Set(reflect.Zero(dstVal.Type()))
 			return false, nil
 		}
-		sz := size(value)
+		// sz := size(value)
+		sz := int(C.cass_value_item_count(value))
 		dstVal.Set(reflect.MakeSlice(dstVal.Type(), sz, sz))
 		colIter := C.cass_iterator_from_collection(value)
 		defer C.cass_iterator_free(colIter)
