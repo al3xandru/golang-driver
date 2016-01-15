@@ -71,6 +71,9 @@ func TestDate(t *testing.T) {
 		t.Errorf("%d = %d (%s != %s)", d1.Days, d2.Days,
 			d1.Time(), d2.Time())
 	}
+	if _, err := cassandra.ParseDate("2016-1-1"); err != nil {
+		t.Fatal(err)
+	}
 }
 
 func TestTimeTypes(t *testing.T) {

@@ -40,8 +40,22 @@ func (d *Date) Time() time.Time {
 	return Epoch.Add(time.Duration(v*24) * time.Hour)
 }
 
+var datePatterns = []string{
+	"2006-01-02",
+	"2006-01-2",
+	"2006-1-02",
+	"2006-1-2",
+}
+
 func ParseDate(s string) (*Date, error) {
-	t, err := time.Parse("2006-01-02", s)
+	var t time.Time
+	var err error
+	for _, p := range datePatterns {
+		t, err = time.Parse(p, s)
+		if err == nil {
+			break
+		}
+	}
 	if err != nil {
 		return nil, err
 	}
