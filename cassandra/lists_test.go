@@ -17,6 +17,13 @@ func TestLists(t *testing.T) {
 	}
 	defer test.TearDown(colCleanup)
 
+	testSelectLists(t, session)
+	testInsertListsUsingPreparedStatement(t, session)
+	testInsertListsUsingStatement(t, session)
+	// t.Error("logs")
+}
+
+func testSelectLists(t *testing.T, session *cassandra.Session) {
 	rows, err := session.Exec("SELECT intlist, textlist, datelist FROM golang_driver.listtypes")
 	if err != nil {
 		t.Fatal(err)
@@ -53,6 +60,46 @@ func TestLists(t *testing.T) {
 	}
 	if dateLst[6].String() != "2015-12-18" {
 		t.Errorf("datelist[6] \"2015-12-18\" != %s", dateLst[6].String())
+	}
+}
+
+func testInsertListsUsingPreparedStatement(t *testing.T, session *cassandra.Session) {
+	prepStmt, err := session.Prepare("INSERT INTO golang_driver.listtypes (id, intlist, textlist, datelist) VALUES (?, ?, ?, ?)")
+	if err != nil {
+		t.Error(err)
+		return
+	}
+
+	dates := make([]cassandra.Date, 3)
+	dates[0] = *cassandra.NewDate(2016, 1, 15)
+	dates[1] = *cassandra.NewDate(2016, 1, 15)
+	dates[2] = *cassandra.NewDate(2016, 1, 15)
+
+	_, err = prepStmt.Exec(2, []int{1, 2, 3}, []string{"a", "b", "c"}, dates)
+	if err != nil {
+		t.Error(err)
+	}
+	_, err = prepStmt.Exec(3, []int{4, 5, 6}, []string{"d", "e", "f"}, []string{"2016-1-15", "2016-01-16"})
+	if err != nil {
+		t.Error(err)
+	}
+}
+
+func testInsertListsUsingStatement(t *testing.T, session *cassandra.Session) {
+	dates := make([]cassandra.Date, 3)
+	dates[0] = *cassandra.NewDate(2016, 1, 15)
+	dates[1] = *cassandra.NewDate(2016, 1, 15)
+	dates[2] = *cassandra.NewDate(2016, 1, 15)
+
+	_, err := session.Exec("INSERT INTO golang_driver.listtypes (id, intlist, textlist, datelist) VALUES (?, ?, ?, ?)",
+		int32(4), []int32{7, 8, 9}, []string{"g", "h", "i"}, dates)
+	if err != nil {
+		t.Error(err)
+	}
+	_, err = session.Exec("INSERT INTO golang_driver.listtypes (id, intlist, textlist, datelist) VALUES (?, ?, ?, ?)",
+		5, []int{10, 11, 12}, []string{"j", "k", "l"}, []string{"2016-1-15", "2016-01-16"})
+	if err == nil {
+		t.Error("should fail as a string doesn't convert to Date automatically")
 	}
 }
 
