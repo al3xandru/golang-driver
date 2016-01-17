@@ -24,6 +24,7 @@ type primitiveTypedVal struct {
 type collectionTypedVal struct {
 	cptr     *C.struct_CassCollection_
 	dataType cassDataType
+	cassType C.CassValueType
 }
 
 type binder interface {
@@ -46,9 +47,9 @@ func write(stmt *Statement, value interface{}, index int, dataType cassDataType)
 
 func newCassTypedVal(value interface{}, dataType cassDataType) (binder, error) {
 	cassValueType := valueType(dataType)
-	if cassValueType != CASS_VALUE_TYPE_UNKNOWN {
-		fmt.Printf("CassValueType: %04x\n", cassValueType)
-	}
+	// if cassValueType != CASS_VALUE_TYPE_UNKNOWN {
+	// 	fmt.Printf("CassValueType: %04x\n", cassValueType)
+	// }
 
 	switch cassValueType {
 	case CASS_VALUE_TYPE_ASCII, CASS_VALUE_TYPE_TEXT, CASS_VALUE_TYPE_VARCHAR:
@@ -369,20 +370,38 @@ func toTimestamp(value interface{}, cassType C.CassValueType) (*primitiveTypedVa
 }
 
 func toInet(value interface{}, cassType C.CassValueType) (*primitiveTypedVal, error) {
+	switch value := value.(type) {
+	case net.IP:
+		return &primitiveTypedVal{[]byte(value), CASS_VALUE_TYPE_INET}, nil
+	}
+
 	return nil, fmt.Errorf("cannot convert %T into %s", value, cassTypeName(cassType))
 }
 
 func toBlob(value interface{}, cassType C.CassValueType) (*primitiveTypedVal, error) {
+	switch value := value.(type) {
+	case []byte:
+		return &primitiveTypedVal{value, CASS_VALUE_TYPE_BLOB}, nil
+	}
+
+	rVal := reflect.ValueOf(value)
+	switch rVal.Type().Kind() {
+	case reflect.Slice, reflect.Array:
+		if rVal.Type().Elem().Kind() == reflect.Uint8 {
+			return &primitiveTypedVal{rVal.Bytes(), CASS_VALUE_TYPE_BLOB}, nil
+		}
+	}
+
 	return nil, fmt.Errorf("cannot convert %T into %s", value, cassTypeName(cassType))
 }
 
 func toList(value interface{}, dataType cassDataType) (*collectionTypedVal, error) {
-	fmt.Printf("toList(%v)\n", value)
+	// fmt.Printf("toList(%v)\n", value)
 	rVal := reflect.ValueOf(value)
 	switch rVal.Type().Kind() {
 	case reflect.Slice, reflect.Array:
 		col := C.cass_collection_new(C.CASS_COLLECTION_TYPE_LIST, C.size_t(rVal.Len()))
-		ctv := &collectionTypedVal{col, dataType}
+		ctv := &collectionTypedVal{col, dataType, CASS_VALUE_TYPE_LIST}
 
 		var elemDataType cassDataType = nil
 		if dataType != nil {
@@ -407,10 +426,84 @@ func toList(value interface{}, dataType cassDataType) (*collectionTypedVal, erro
 }
 
 func toMap(value interface{}, dataType cassDataType) (*collectionTypedVal, error) {
-	return nil, fmt.Errorf("cannot convert %T into %s", value, cassTypeName(valueType(dataType)))
+	rVal := reflect.ValueOf(value)
+	if rVal.Type().Kind() != reflect.Map {
+		return nil, fmt.Errorf("cannot convert %T into %s", value, cassTypeName(valueType(dataType)))
+	}
+	col := C.cass_collection_new(C.CASS_COLLECTION_TYPE_MAP, C.size_t(rVal.Len()))
+	ctv := &collectionTypedVal{col, dataType, CASS_VALUE_TYPE_MAP}
+
+	var keyDataType, valDataType cassDataType = nil, nil
+	if dataType != nil {
+		keyDataType = cassDataType(C.cass_data_type_sub_data_type(dataType, 0))
+		valDataType = cassDataType(C.cass_data_type_sub_data_type(dataType, 1))
+	}
+
+	keys := rVal.MapKeys()
+	for _, key := range keys {
+		tv, err := newCassTypedVal(key.Interface(), keyDataType)
+		if err != nil {
+			return nil, err
+		}
+		if err = tv.BindTo(ctv, -1); err != nil {
+			return nil, err
+		}
+		tv, err = newCassTypedVal(rVal.MapIndex(key).Interface(), valDataType)
+		if err = tv.BindTo(ctv, -1); err != nil {
+			return nil, err
+		}
+	}
+
+	return ctv, nil
 }
 
 func toSet(value interface{}, dataType cassDataType) (*collectionTypedVal, error) {
+	rVal := reflect.ValueOf(value)
+	switch rVal.Type().Kind() {
+	case reflect.Slice, reflect.Array:
+		col := C.cass_collection_new(C.CASS_COLLECTION_TYPE_SET, C.size_t(rVal.Len()))
+		ctv := &collectionTypedVal{col, dataType, CASS_VALUE_TYPE_SET}
+
+		var elemDataType cassDataType = nil
+		if dataType != nil {
+			elemDataType = cassDataType(C.cass_data_type_sub_data_type(dataType, 0))
+		}
+
+		idx := 0
+		for idx < rVal.Len() {
+			tv, err := newCassTypedVal(rVal.Index(idx).Interface(), elemDataType)
+			if err != nil {
+				return nil, err
+			}
+			if err = tv.BindTo(ctv, -1); err != nil {
+				return nil, err
+			}
+			idx += 1
+		}
+
+		return ctv, nil
+	case reflect.Map:
+		col := C.cass_collection_new(C.CASS_COLLECTION_TYPE_SET, C.size_t(rVal.Len()))
+		ctv := &collectionTypedVal{col, dataType, CASS_VALUE_TYPE_SET}
+
+		var elemDataType cassDataType = nil
+		if dataType != nil {
+			elemDataType = cassDataType(C.cass_data_type_sub_data_type(dataType, 0))
+		}
+
+		keys := rVal.MapKeys()
+		for _, key := range keys {
+			tv, err := newCassTypedVal(key.Interface(), elemDataType)
+			if err != nil {
+				return nil, err
+			}
+			if err = tv.BindTo(ctv, -1); err != nil {
+				return nil, err
+			}
+		}
+
+		return ctv, nil
+	}
 	return nil, fmt.Errorf("cannot convert %T into %s", value, cassTypeName(valueType(dataType)))
 }
 
@@ -471,7 +564,7 @@ func (ptv *primitiveTypedVal) BindTo(dst interface{}, index int) error {
 		default:
 			panic(fmt.Sprintf("expecting int/int32 found %T", ptv.val))
 		}
-		fmt.Printf("BindTo(%d) %T(%d): %d\n", index, ptv.val, ptv.val, ival)
+		// fmt.Printf("BindTo(%d) %T(%d): %d\n", index, ptv.val, ptv.val, ival)
 		switch dst := dst.(type) {
 		case *Statement:
 			retc = C.cass_statement_bind_int32(dst.cptr, pos, ival)

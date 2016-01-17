@@ -7,11 +7,7 @@ package cassandra
 import "C"
 import "unsafe"
 
-import (
-	"errors"
-	"fmt"
-	"reflect"
-)
+import "errors"
 
 type Session struct {
 	cptr    *C.struct_CassSession_
@@ -24,19 +20,42 @@ func (session *Session) Close() {
 	session.Cluster = nil
 }
 
+// Executes the given query and returns either the resulting
+// *Rows or an error.
 func (session *Session) Exec(query string, args ...interface{}) (*Rows, error) {
+	future := session.ExecAsync(query, args...)
+	defer future.Close()
+
+	if err := future.Error(); err != nil {
+		return nil, err
+	}
+
+	return future.Result(), nil
+}
+
+// Returns a *Statement which can be used to customize the CL,
+// Serial CL, etc. The *Statement **must** be Close() once done.
+func (session *Session) Query(query string, args ...interface{}) (*Statement, error) {
+	stmt := newSimpleStatement(session, query, len(args))
+
+	if err := stmt.bind(args...); err != nil {
+		return nil, err
+	}
+
+	return stmt, nil
+}
+
+// Executes the given query asynchronously and returns a *Future
+// that can be used to retrieve the results (or error).
+func (session *Session) ExecAsync(query string, args ...interface{}) *Future {
 	stmt := newSimpleStatement(session, query, len(args))
 	defer stmt.Close()
 
-	stmt.bind(args...)
-	return stmt.Exec()
-}
+	if err := stmt.bind(args...); err != nil {
+		return &Future{err: err}
+	}
 
-func (session *Session) Query(query string, args ...interface{}) *Statement {
-	stmt := newSimpleStatement(session, query, len(args))
-	stmt.Args = args
-
-	return stmt
+	return stmt.ExecAsync()
 }
 
 func (session *Session) Prepare(query string) (*PreparedStatement, error) {
@@ -94,6 +113,8 @@ func (c Consistency) toC() C.CassConsistency {
 		return C.CassConsistency(C.CASS_CONSISTENCY_QUORUM)
 	case ALL:
 		return C.CassConsistency(C.CASS_CONSISTENCY_ALL)
+	case LOCAL_ONE:
+		return C.CassConsistency(C.CASS_CONSISTENCY_LOCAL_ONE)
 	case LOCAL_QUORUM:
 		return C.CassConsistency(C.CASS_CONSISTENCY_LOCAL_QUORUM)
 	case EACH_QUORUM:
@@ -102,8 +123,6 @@ func (c Consistency) toC() C.CassConsistency {
 		return C.CassConsistency(C.CASS_CONSISTENCY_SERIAL)
 	case LOCAL_SERIAL:
 		return C.CassConsistency(C.CASS_CONSISTENCY_LOCAL_SERIAL)
-	case LOCAL_ONE:
-		return C.CassConsistency(C.CASS_CONSISTENCY_LOCAL_ONE)
 	}
 	return C.CassConsistency(C.CASS_CONSISTENCY_UNKNOWN)
 }
@@ -142,13 +161,28 @@ func (pstmt *PreparedStatement) Exec(args ...interface{}) (*Rows, error) {
 
 func (pstmt *PreparedStatement) ExecAsync(args ...interface{}) *Future {
 	stmt := newBoundStatement(pstmt)
-	stmt.Args = args
+	defer stmt.Close()
+
 	stmt.WithConsistency(pstmt.consistency)
 	stmt.WithSerialConsistency(pstmt.serialConsistency)
 
-	defer stmt.Close()
+	if err := stmt.bind(args...); err != nil {
+		return &Future{err: err}
+	}
 
 	return stmt.ExecAsync()
+}
+
+func (pstmt *PreparedStatement) Query(args ...interface{}) (*Statement, error) {
+	stmt := newBoundStatement(pstmt)
+	stmt.WithConsistency(pstmt.consistency)
+	stmt.WithSerialConsistency(pstmt.consistency)
+
+	if err := stmt.bind(args...); err != nil {
+		return nil, err
+	}
+
+	return stmt, nil
 }
 
 type Future struct {
@@ -250,119 +284,4 @@ func (rows *Rows) Scan(args ...interface{}) error {
 	}
 
 	return nil
-}
-
-const (
-	CASS_VALUE_TYPE_UNKNOWN   = 0xFFFF
-	CASS_VALUE_TYPE_CUSTOM    = 0x0000
-	CASS_VALUE_TYPE_ASCII     = 0x0001
-	CASS_VALUE_TYPE_BIGINT    = 0x0002
-	CASS_VALUE_TYPE_BLOB      = 0x0003
-	CASS_VALUE_TYPE_BOOLEAN   = 0x0004
-	CASS_VALUE_TYPE_COUNTER   = 0x0005
-	CASS_VALUE_TYPE_DECIMAL   = 0x0006
-	CASS_VALUE_TYPE_DOUBLE    = 0x0007
-	CASS_VALUE_TYPE_FLOAT     = 0x0008
-	CASS_VALUE_TYPE_INT       = 0x0009
-	CASS_VALUE_TYPE_TEXT      = 0x000A
-	CASS_VALUE_TYPE_TIMESTAMP = 0x000B
-	CASS_VALUE_TYPE_UUID      = 0x000C
-	CASS_VALUE_TYPE_VARCHAR   = 0x000D
-	CASS_VALUE_TYPE_VARINT    = 0x000E
-	CASS_VALUE_TYPE_TIMEUUID  = 0x000F
-	CASS_VALUE_TYPE_INET      = 0x0010
-	CASS_VALUE_TYPE_DATE      = 0x0011
-	CASS_VALUE_TYPE_TIME      = 0x0012
-	CASS_VALUE_TYPE_SMALL_INT = 0x0013
-	CASS_VALUE_TYPE_TINY_INT  = 0x0014
-	CASS_VALUE_TYPE_LIST      = 0x0020
-	CASS_VALUE_TYPE_MAP       = 0x0021
-	CASS_VALUE_TYPE_SET       = 0x0022
-	CASS_VALUE_TYPE_UDT       = 0x0030
-	CASS_VALUE_TYPE_TUPLE     = 0x0031
-)
-
-func cassTypeName(kind C.CassValueType) string {
-	switch kind {
-	case CASS_VALUE_TYPE_ASCII:
-		return "ascii"
-	case CASS_VALUE_TYPE_BIGINT:
-		return "bigint"
-	case CASS_VALUE_TYPE_BLOB:
-		return "blob"
-	case CASS_VALUE_TYPE_BOOLEAN:
-		return "boolean"
-	case CASS_VALUE_TYPE_COUNTER:
-		return "counter"
-	case CASS_VALUE_TYPE_DECIMAL:
-		return "decimal"
-	case CASS_VALUE_TYPE_DOUBLE:
-		return "double"
-	case CASS_VALUE_TYPE_FLOAT:
-		return "float"
-	case CASS_VALUE_TYPE_INT:
-		return "int"
-	case CASS_VALUE_TYPE_TEXT:
-		return "text"
-	case CASS_VALUE_TYPE_TIMESTAMP:
-		return "timestamp"
-	case CASS_VALUE_TYPE_UUID:
-		return "uuid"
-	case CASS_VALUE_TYPE_VARCHAR:
-		return "varchar"
-	case CASS_VALUE_TYPE_VARINT:
-		return "varint"
-	case CASS_VALUE_TYPE_TIMEUUID:
-		return "timeuuid"
-	case CASS_VALUE_TYPE_INET:
-		return "inet"
-	case CASS_VALUE_TYPE_DATE:
-		return "date"
-	case CASS_VALUE_TYPE_TIME:
-		return "time"
-	case CASS_VALUE_TYPE_SMALL_INT:
-		return "smallint"
-	case CASS_VALUE_TYPE_TINY_INT:
-		return "tinyint"
-	case CASS_VALUE_TYPE_LIST:
-		return "list"
-	case CASS_VALUE_TYPE_MAP:
-		return "map"
-	case CASS_VALUE_TYPE_SET:
-		return "set"
-	case CASS_VALUE_TYPE_UDT:
-		return "udt"
-	case CASS_VALUE_TYPE_TUPLE:
-		return "tuple"
-	case CASS_VALUE_TYPE_CUSTOM:
-		return "custom"
-	default:
-		return "UNKNOWN"
-	}
-}
-
-func newError(retc C.CassError) error {
-	return errors.New(C.GoString(C.cass_error_desc(retc)))
-}
-
-func newColumnError(rows *Rows, index int, v interface{}, err error) error {
-	columnName := rows.ColumnName(index)
-	columnType := rows.ColumnType(index)
-	argType := reflect.TypeOf(v).String()
-	errMsg := fmt.Sprintf("%s (arg %d, type: %s, column: %s, type: %s)",
-		err.Error(),
-		index,
-		argType,
-		columnName,
-		columnType)
-	return errors.New(errMsg)
-}
-
-type statement struct {
-	cptr *C.struct_CassStatement_
-}
-
-func async(f func() *C.struct_CassFuture_) *Future {
-	ptrFuture := f()
-	return &Future{cptr: ptrFuture}
 }

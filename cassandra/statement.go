@@ -5,10 +5,7 @@ package cassandra
 // #include <stdlib.h>
 // #include <cassandra.h>
 import "C"
-import (
-	"fmt"
-	"unsafe"
-)
+import "unsafe"
 
 type Statement struct {
 	cptr              *C.struct_CassStatement_
@@ -43,7 +40,7 @@ func (stmt *Statement) Exec() (*Rows, error) {
 	defer future.Close()
 
 	if err := future.Error(); err != nil {
-		fmt.Printf("Execute: %s\r\n", err.Error())
+		// fmt.Printf("Execute: %s\r\n", err.Error())
 		return nil, err
 	}
 	return future.Result(), nil
@@ -62,46 +59,20 @@ func (stmt *Statement) ExecAsync() *Future {
 			return &Future{err: newError(retc)}
 		}
 	}
-	if len(stmt.Args) > 0 {
-		if err := stmt.bind(stmt.Args...); err != nil {
-			// return an error Future
-			return &Future{err: err}
-		}
-	}
+
 	return async(func() *C.struct_CassFuture_ {
 		return C.cass_session_execute(stmt.session.cptr, stmt.cptr)
 	})
 }
 
 func (stmt *Statement) bind(args ...interface{}) error {
+	stmt.Args = args
 	for i, v := range args {
 		if err := write(stmt, v, i, stmt.dataType(i)); err != nil {
 			return err
 		}
 	}
 	return nil
-}
-
-type cassDataType *C.struct_CassDataType_
-
-func valueType(cdt cassDataType) C.CassValueType {
-	if cdt == nil {
-		return CASS_VALUE_TYPE_UNKNOWN
-	}
-
-	return C.cass_data_type_type(cdt)
-}
-
-func (stmt *Statement) dataType(index int) cassDataType {
-	if stmt.pstmt == nil {
-		return nil
-	}
-	return cassDataType(C.cass_prepared_parameter_data_type(stmt.pstmt.cptr, C.size_t(index)))
-	// cassDataType := C.cass_prepared_parameter_data_type(stmt.pstmt.cptr, C.size_t(index))
-	// if cassDataType == nil {
-	// 	return CASS_VALUE_TYPE_UNKNOWN
-	// }
-	// return C.cass_data_type_type(cassDataType)
 }
 
 func newSimpleStatement(session *Session, query string, paramLen int) *Statement {
