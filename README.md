@@ -61,13 +61,13 @@ See the tests in the main package for more examples.
 
 ### What is supposed to work
 
-1. Connecting to a cluster (sort of minimal expectation), but missing all the advanced configuration
-   options.
-2. A range of basic Cassandra types, including also the new ones introduced in
+1. Connecting to a cluster (sort of minimal expectation) with support for some
+   of the configuration options (not all options provided by the C/C++ driver
+   are available)
+2. A range of basic Cassandra types, including the new ones introduced in
    version 2.2 (tinyint, smallint, date, time, timestamp). 
 
-   * There are a couple of missing data types (see below).
-   * Collections can only be read and not written
+   * There are a couple of missing data types (see [To dos](#to-do)).
    * There's no support yet for UDTs
 
 3. Executing simple statements:
@@ -89,15 +89,16 @@ See the tests in the main package for more examples.
     ```go
     pstmt := session.Prepare("select * from table where pk = ?")
     pstmt.SetConsistency(ANY)
+    // once prepared you can reuse the prepared statement by
+    // binding new sets of parameters
     for key := range keys {
         pstmt.Exec(key)
     }
     ```
 
-6. Even if the underlying implementation uses async calls, the exposed async API
-   is minimal for now until the main API is further tested.
+6. There are similar functions for executing async statements which return a
+   `*cassandra.Future`
 
-_The list of remaining todos is currently longer than the above one._
 
 ### To do
 
@@ -108,13 +109,20 @@ _The list of remaining todos is currently longer than the above one._
 * [X] Prepared statements
 * [X] Basic support for `uuid`, `timeuuid`
 * [X] Advanced cluster configuration
+* [X] Async API
+* [X] Support for collections (_note_: currently writing to Cassandra set column
+    works only with prepared statements)
 * [ ] Missing C* types: `decimal`, `varint`
-* [ ] Async API
-* [X] Support for reading collections
-* [ ] Support for collections
 * [ ] Support for tuples
 * [ ] Support for UDTs
 * [ ] Named parameters
+
+#### Notes
+
+Go doesn't have a `Set`-like type which makes it very hard to create an
+automatic mapping to a Cassandra `set` column with non-prepared statements. If
+prepared statements are used, then metadata about the target column is available
+and conversions from `slices`, `arrays`, and `map[type]bool` can be made.
 
 ## Credits
 
