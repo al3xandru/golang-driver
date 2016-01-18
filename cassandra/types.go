@@ -9,6 +9,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"math"
+	"math/big"
 	"strconv"
 	"strings"
 	"time"
@@ -192,4 +193,59 @@ func Set(val interface{}) *internalSet {
 
 type internalSet struct {
 	value interface{}
+}
+
+// A Decimal type corresponding to the Cassandra decimal data type.
+// The internal representation of the decimal is an arbitrary precision
+// integer unscaled balue and a 32-bit integer scale. Thus the value
+// is equal to (unscaled * 10 ^ (-scale))
+type Decimal struct {
+	Value *big.Int
+	Scale int32
+}
+
+func ParseDecimal(val string) (*Decimal, error) {
+	if val == "" {
+		return nil, fmt.Errorf("val must non empty")
+	}
+	parts := strings.Split(val, ".")
+	if len(parts) > 2 {
+		return nil, fmt.Errorf("%s is not a valid decimal (too many .)", val)
+	}
+
+	scale := 0
+	if len(parts) == 2 {
+		scale = len(parts[1])
+	}
+	if scale < math.MinInt32 || scale > math.MaxInt32 {
+		return nil, fmt.Errorf("%s is not a valid decimal (fractional part too large)", val)
+	}
+	bigint := big.NewInt(0)
+	bigint, ok := bigint.SetString(strings.Join(parts, ""), 10)
+	if !ok {
+		return nil, fmt.Errorf("val is not a valid decimal (%s)", val)
+	}
+
+	return &Decimal{bigint, int32(scale)}, nil
+}
+
+func NewDecimal(val int64, scale int32) *Decimal {
+	return &Decimal{big.NewInt(val), scale}
+}
+
+// func NewDecimalFromFloat(val float64) *Decimal {
+// 	// this is ugly
+// 	s := strconv.FormatFloat(val, 'f', -1, 64)
+// 	d, err := ParseDecimal(s)
+// 	// this should never happen but guard
+// 	if err != nil {
+// 		panic(err)
+// 	}
+// 	return d
+// }
+
+func (d *Decimal) String() string {
+	s := d.Value.String()
+	pos := len(s) - int(d.Scale)
+	return fmt.Sprintf("%s.%s", s[0:pos], s[pos:])
 }
