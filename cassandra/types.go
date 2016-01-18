@@ -185,3 +185,11 @@ func (u UUID) String() string {
 	return fmt.Sprintf("%08x-%04x-%04x-%04x-%012x",
 		u[:4], u[4:6], u[6:8], u[8:10], u[10:])
 }
+
+func Set(val interface{}) *internalSet {
+	return &internalSet{val}
+}
+
+type internalSet struct {
+	value interface{}
+}

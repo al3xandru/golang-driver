@@ -139,6 +139,8 @@ func newCassTypedVal(value interface{}, dataType cassDataType) (binder, error) {
 		return toInet(value, CASS_VALUE_TYPE_INET)
 	case []byte:
 		return toBlob(value, CASS_VALUE_TYPE_BLOB)
+	case *internalSet:
+		return toSet(value.value, nil)
 	}
 	// last attempt
 	rVal := reflect.ValueOf(value)
@@ -422,13 +424,15 @@ func toList(value interface{}, dataType cassDataType) (*collectionTypedVal, erro
 		return ctv, nil
 	}
 
-	return nil, fmt.Errorf("cannot convert %T into %s", value, cassTypeName(valueType(dataType)))
+	return nil, fmt.Errorf("cannot convert %T into %s", value,
+		collectionTypeName(dataType, CASS_VALUE_TYPE_LIST))
 }
 
 func toMap(value interface{}, dataType cassDataType) (*collectionTypedVal, error) {
 	rVal := reflect.ValueOf(value)
 	if rVal.Type().Kind() != reflect.Map {
-		return nil, fmt.Errorf("cannot convert %T into %s", value, cassTypeName(valueType(dataType)))
+		return nil, fmt.Errorf("cannot convert %T into %s", value,
+			collectionTypeName(dataType, CASS_VALUE_TYPE_MAP))
 	}
 	col := C.cass_collection_new(C.CASS_COLLECTION_TYPE_MAP, C.size_t(rVal.Len()))
 	ctv := &collectionTypedVal{col, dataType, CASS_VALUE_TYPE_MAP}
@@ -458,6 +462,11 @@ func toMap(value interface{}, dataType cassDataType) (*collectionTypedVal, error
 }
 
 func toSet(value interface{}, dataType cassDataType) (*collectionTypedVal, error) {
+	switch value := value.(type) {
+	case *internalSet:
+		return toSet(value.value, dataType)
+	}
+
 	rVal := reflect.ValueOf(value)
 	switch rVal.Type().Kind() {
 	case reflect.Slice, reflect.Array:
@@ -504,7 +513,28 @@ func toSet(value interface{}, dataType cassDataType) (*collectionTypedVal, error
 
 		return ctv, nil
 	}
-	return nil, fmt.Errorf("cannot convert %T into %s", value, cassTypeName(valueType(dataType)))
+
+	return nil, fmt.Errorf("cannot convert %T into %s", value,
+		collectionTypeName(dataType, CASS_VALUE_TYPE_SET))
+}
+
+func collectionTypeName(dataType cassDataType, valType C.CassValueType) string {
+	if dataType == nil {
+		return cassTypeName(valType)
+	}
+	switch valType {
+	case CASS_VALUE_TYPE_LIST:
+		return fmt.Sprintf("%s<%s>", cassTypeName(valType),
+			cassTypeName(valueType(cassDataType(C.cass_data_type_sub_data_type(dataType, 0)))))
+	case CASS_VALUE_TYPE_SET:
+		return fmt.Sprintf("%s<%s>", cassTypeName(valType),
+			cassTypeName(valueType(cassDataType(C.cass_data_type_sub_data_type(dataType, 0)))))
+	case CASS_VALUE_TYPE_MAP:
+		return fmt.Sprintf("%s<%s, %s>", cassTypeName(valType),
+			cassTypeName(valueType(cassDataType(C.cass_data_type_sub_data_type(dataType, 0)))),
+			cassTypeName(valueType(cassDataType(C.cass_data_type_sub_data_type(dataType, 1)))))
+	}
+	return cassTypeName(valType)
 }
 
 // implements internal `binder` interface
