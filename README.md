@@ -107,11 +107,11 @@ See the tests in the main package for more examples.
 * [X] Binding values to statements
 * [X] Read/Write Cassandra `blob` (`[]byte`) and `inet` (`net.IP`)
 * [X] Prepared statements
-* [X] Basic support for `uuid`, `timeuuid`
+* [X] Basic support for Cassandra `uuid`, `timeuuid` using `cassandra.UUID`
+    struct
 * [X] Advanced cluster configuration
 * [X] Async API
-* [X] Support for collections (_note_: currently writing to Cassandra set column
-    works only with prepared statements)
+* [X] Support for collections 
 * [ ] Missing C* types: `decimal`, `varint`
 * [ ] Support for tuples
 * [ ] Support for UDTs
@@ -119,10 +119,31 @@ See the tests in the main package for more examples.
 
 #### Notes
 
+##### Sets
+
 Go doesn't have a `Set`-like type which makes it very hard to create an
 automatic mapping to a Cassandra `set` column with non-prepared statements. If
 prepared statements are used, then metadata about the target column is available
 and conversions from `slices`, `arrays`, and `map[type]bool` can be made.
+
+This library offers a `cassandra.Set()` function that can wrap a slice, array,
+or map to make it aware that the target column is `set`. 
+
+If you are using prepared statements, you won't need this function.
+
+##### Decimal
+
+This library provides a very basic `cassandra.Decimal` type with just a couple
+of functions to allow you to store/retrieve the Cassandra `decimal` type.
+
+In case you need more complete decimal libraries (that provide math operations
+on decimals), this is what I could find:
+
+* [decimal library for Go](http://engineering.shopspring.com/2015/03/03/decimal/)
+* [*fpd.Decimal](https://github.com/oguzbilgic/fpd)
+
+Converting from one of these to the `cassandra.Decimal` for storage should work
+without any problems.
 
 ## Credits
 
