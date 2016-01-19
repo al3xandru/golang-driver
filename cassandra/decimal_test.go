@@ -1,7 +1,10 @@
 package cassandra_test
 
 import (
+	"fmt"
 	"golang-driver/cassandra"
+	"golang-driver/cassandra/test"
+	"math/big"
 	"testing"
 )
 
@@ -57,3 +60,118 @@ func TestParseDecimal(t *testing.T) {
 	}
 	// t.Error("log")
 }
+
+func TestDecimalAndVarint(t *testing.T) {
+	session := test.GetSession()
+	defer test.Shutdown()
+
+	if err := test.Setup(bignumbersSetup); err != nil {
+		t.Log("Unexpected error while setup. You might need to clean up manually golang_driver keyspace")
+		t.Fatal(err)
+	}
+	defer test.TearDown(bignumbersCleanup)
+
+	testInsertDecimalVarintUsingStatement(t, session)
+	testInsertDecimalVarintUsingPreparedStatement(t, session)
+	testSelectDecimalVarint(t, session)
+	t.Error("log")
+}
+
+func testSelectDecimalVarint(t *testing.T, session *cassandra.Session) {
+	rows, err := session.Exec("SELECT dec, vint from golang_driver.bignumbers")
+	if err != nil {
+		t.Error(err)
+		return
+	}
+
+	// if !rows.Next() {
+	// 	t.Errorf("expecting at least 1 row")
+	// 	return
+	// }
+	var dec cassandra.Decimal
+	var vint big.Int
+
+	for rows.Next() {
+		if err := rows.Scan(&dec, &vint); err != nil {
+			t.Error(err)
+			return
+		}
+		fmt.Printf("decimal: %s\n", dec.String())
+		fmt.Printf("varint : %s\n", vint.String())
+	}
+	// if dec.Scale != 20 {
+	// 	t.Errorf("decimal scale %s != 20", dec.String())
+	// }
+	// if dec.String() != "123456789.12345678901234567890" {
+	// 	t.Errorf("decimal %s != 123456789.12345678901234567890", dec.String())
+	// }
+	// if vint.String() != "12345678901234567890" {
+	// 	t.Errorf("varint %s != 12345678901234567890", vint.String())
+	// }
+}
+
+func testInsertDecimalVarintUsingStatement(t *testing.T, session *cassandra.Session) {
+	dec := createDecimal("123456789.12345678901234567890", t)
+	vint := createVarint("12345678901234567890", t)
+	if _, err := session.Exec("INSERT INTO golang_driver.bignumbers (id, dec, vint) VALUES (?, ?, ?)",
+		100, dec, vint); err != nil {
+		t.Error(err)
+	}
+
+	dec = createDecimal("-98765.43210", t)
+	vint = createVarint("-9876543210987654321", t)
+	if _, err := session.Exec("INSERT INTO golang_driver.bignumbers (id, dec, vint) VALUES (?, ?, ?)",
+		101, dec, vint); err != nil {
+		t.Error(err)
+	}
+}
+
+func testInsertDecimalVarintUsingPreparedStatement(t *testing.T, session *cassandra.Session) {
+	pstmt, err := session.Prepare("INSERT INTO golang_driver.bignumbers (id, dec, vint) VALUES (?, ?, ?)")
+	if err != nil {
+		t.Error(err)
+		return
+	}
+
+	dec := createDecimal("123456789.12345678901234567890", t)
+	vint := createVarint("12345678901234567890", t)
+	if _, err = pstmt.Exec(1000, dec, vint); err != nil {
+		t.Error(err)
+	}
+
+	dec = createDecimal("-98765.43210", t)
+	vint = createVarint("-9876543210987654321", t)
+	if _, err = pstmt.Exec(1001, dec, vint); err != nil {
+		t.Error(err)
+	}
+}
+
+func createDecimal(v string, t *testing.T) *cassandra.Decimal {
+	dec, err := cassandra.ParseDecimal(v)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return dec
+}
+
+func createVarint(v string, t *testing.T) *big.Int {
+	vint := big.NewInt(0)
+	vint, ok := vint.SetString(v, 10)
+	if !ok {
+		t.Fatalf("cannot create math/big.Int %s", v)
+	}
+	return vint
+}
+
+var (
+	bignumbersSetup = []string{
+		"CREATE KEYSPACE IF NOT EXISTS golang_driver WITH replication = {'class': 'SimpleStrategy', 'replication_factor': 1};",
+		`CREATE TABLE IF NOT EXISTS golang_driver.bignumbers (id int PRIMARY KEY, dec decimal, vint varint)`,
+		`INSERT INTO golang_driver.bignumbers (id, dec, vint) VALUES (1, 123456789.12345678901234567890, 12345678901234567890)`,
+		`INSERT INTO golang_driver.bignumbers (id, dec, vint) VALUES (2, -123456789.12345678901234567890, -12345678901234567890)`,
+	}
+
+	bignumbersCleanup = []string{
+	// "DROP TABLE golang_driver.bignumbers",
+	}
+)

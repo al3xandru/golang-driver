@@ -8,6 +8,7 @@ import "C"
 import (
 	"fmt"
 	"math"
+	"math/big"
 	"net"
 	"reflect"
 	"unsafe"
@@ -66,14 +67,14 @@ func newCassTypedVal(value interface{}, dataType cassDataType) (binder, error) {
 		return toTinyInt(value, cassValueType)
 	// case CASS_VALUE_TYPE_COUNTER, ,
 	// 	return readInt(value, cassType, dst)
-	// case CASS_VALUE_TYPE_VARINT:
-	// 	return readVarint(value, cassType, dst)
+	case CASS_VALUE_TYPE_VARINT:
+		return toVarint(value, cassValueType)
 	case CASS_VALUE_TYPE_FLOAT:
 		return toFloat(value, cassValueType)
 	case CASS_VALUE_TYPE_DOUBLE:
 		return toDouble(value, cassValueType)
-	// case CASS_VALUE_TYPE_DECIMAL:
-	// 	return readDecimal(value, cassType, dst)
+	case CASS_VALUE_TYPE_DECIMAL:
+		return toDecimal(value, cassValueType)
 	case CASS_VALUE_TYPE_TIMESTAMP:
 		return toTimestamp(value, cassValueType)
 	case CASS_VALUE_TYPE_DATE:
@@ -116,10 +117,14 @@ func newCassTypedVal(value interface{}, dataType cassDataType) (binder, error) {
 		} else {
 			return toInt(value, CASS_VALUE_TYPE_INT)
 		}
+	case *big.Int:
+		return toVarint(value, CASS_VALUE_TYPE_VARINT)
 	case float32:
 		return toFloat(value, CASS_VALUE_TYPE_FLOAT)
 	case float64:
 		return toDouble(value, CASS_VALUE_TYPE_DOUBLE)
+	case *Decimal:
+		return toDecimal(value, CASS_VALUE_TYPE_DECIMAL)
 	case string:
 		return toText(value, CASS_VALUE_TYPE_TEXT)
 	case UUID:
@@ -260,6 +265,21 @@ func toTinyInt(value interface{}, cassType C.CassValueType) (*primitiveTypedVal,
 	return nil, fmt.Errorf("cannot convert %T into %s", value, cassTypeName(cassType))
 }
 
+func toVarint(value interface{}, cassType C.CassValueType) (*primitiveTypedVal, error) {
+	switch value := value.(type) {
+	case *big.Int:
+		b := value.Bytes()
+		if value.Sign() == -1 {
+			b = append([]byte{^-1}, b...)
+		} else {
+			b = append([]byte{0}, b...)
+
+		}
+		return &primitiveTypedVal{b, CASS_VALUE_TYPE_VARINT}, nil
+	}
+	return nil, fmt.Errorf("cannot convert %T into %s", value, cassTypeName(cassType))
+}
+
 func toFloat(value interface{}, cassType C.CassValueType) (*primitiveTypedVal, error) {
 	switch value := value.(type) {
 	case float32:
@@ -287,6 +307,14 @@ func toDouble(value interface{}, cassType C.CassValueType) (*primitiveTypedVal, 
 		return &primitiveTypedVal{rVal.Float(), CASS_VALUE_TYPE_DOUBLE}, nil
 	}
 
+	return nil, fmt.Errorf("cannot convert %T into %s", value, cassTypeName(cassType))
+}
+
+func toDecimal(value interface{}, cassType C.CassValueType) (*primitiveTypedVal, error) {
+	switch value := value.(type) {
+	case *Decimal:
+		return &primitiveTypedVal{value, CASS_VALUE_TYPE_DECIMAL}, nil
+	}
 	return nil, fmt.Errorf("cannot convert %T into %s", value, cassTypeName(cassType))
 }
 
@@ -634,6 +662,16 @@ func (ptv *primitiveTypedVal) BindTo(dst interface{}, index int) error {
 		case *collectionTypedVal:
 			retc = C.cass_collection_append_double(dst.cptr, val)
 		}
+	case CASS_VALUE_TYPE_DECIMAL:
+		val := ptv.val.(*Decimal)
+		buf := val.Value.Bytes()
+		fmt.Printf("writeDecimal(%v, %d)\n", buf, val.Scale)
+		switch dst := dst.(type) {
+		case *Statement:
+			retc = C.cass_statement_bind_decimal(dst.cptr, pos,
+				(*C.cass_byte_t)(unsafe.Pointer(&buf[0])), C.size_t(len(buf)),
+				C.cass_int32_t(val.Scale))
+		}
 	case CASS_VALUE_TYPE_UUID, CASS_VALUE_TYPE_TIMEUUID:
 		cStr := C.CString(ptv.val.(UUID).String())
 		defer C.free(unsafe.Pointer(cStr))
@@ -668,12 +706,16 @@ func (ptv *primitiveTypedVal) BindTo(dst interface{}, index int) error {
 		case *collectionTypedVal:
 			retc = C.cass_collection_append_inet(dst.cptr, cInet)
 		}
-	case CASS_VALUE_TYPE_BLOB:
+	case CASS_VALUE_TYPE_BLOB, CASS_VALUE_TYPE_VARINT:
 		val := ptv.val.([]byte)
+		fmt.Printf("writeVarint(%v)\n", val)
+		buf := unsafe.Pointer(&val[0])
 		switch dst := dst.(type) {
 		case *Statement:
+			// retc = C.cass_statement_bind_bytes(dst.cptr, pos,
+			// 	(*C.cass_byte_t(&val[0])), C.size_t(len(val)))
 			retc = C.cass_statement_bind_bytes(dst.cptr, pos,
-				(*C.cass_byte_t)(unsafe.Pointer(&val)), C.size_t(len(val)))
+				(*C.cass_byte_t)(buf), C.size_t(len(val)))
 		case *collectionTypedVal:
 			retc = C.cass_collection_append_bytes(dst.cptr,
 				(*C.cass_byte_t)(unsafe.Pointer(&val)), C.size_t(len(val)))
