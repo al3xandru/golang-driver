@@ -268,14 +268,8 @@ func toTinyInt(value interface{}, cassType C.CassValueType) (*primitiveTypedVal,
 func toVarint(value interface{}, cassType C.CassValueType) (*primitiveTypedVal, error) {
 	switch value := value.(type) {
 	case *big.Int:
-		b := value.Bytes()
-		if value.Sign() == -1 {
-			b = append([]byte{^-1}, b...)
-		} else {
-			b = append([]byte{0}, b...)
-
-		}
-		return &primitiveTypedVal{b, CASS_VALUE_TYPE_VARINT}, nil
+		buf := export2Complement(value)
+		return &primitiveTypedVal{buf, CASS_VALUE_TYPE_VARINT}, nil
 	}
 	return nil, fmt.Errorf("cannot convert %T into %s", value, cassTypeName(cassType))
 }
@@ -664,11 +658,14 @@ func (ptv *primitiveTypedVal) BindTo(dst interface{}, index int) error {
 		}
 	case CASS_VALUE_TYPE_DECIMAL:
 		val := ptv.val.(*Decimal)
-		buf := val.Value.Bytes()
-		fmt.Printf("writeDecimal(%v, %d)\n", buf, val.Scale)
+		buf := export2Complement(val.Value)
 		switch dst := dst.(type) {
 		case *Statement:
 			retc = C.cass_statement_bind_decimal(dst.cptr, pos,
+				(*C.cass_byte_t)(unsafe.Pointer(&buf[0])), C.size_t(len(buf)),
+				C.cass_int32_t(val.Scale))
+		case *collectionTypedVal:
+			retc = C.cass_collection_append_decimal(dst.cptr,
 				(*C.cass_byte_t)(unsafe.Pointer(&buf[0])), C.size_t(len(buf)),
 				C.cass_int32_t(val.Scale))
 		}
@@ -708,17 +705,13 @@ func (ptv *primitiveTypedVal) BindTo(dst interface{}, index int) error {
 		}
 	case CASS_VALUE_TYPE_BLOB, CASS_VALUE_TYPE_VARINT:
 		val := ptv.val.([]byte)
-		fmt.Printf("writeVarint(%v)\n", val)
-		buf := unsafe.Pointer(&val[0])
 		switch dst := dst.(type) {
 		case *Statement:
-			// retc = C.cass_statement_bind_bytes(dst.cptr, pos,
-			// 	(*C.cass_byte_t(&val[0])), C.size_t(len(val)))
 			retc = C.cass_statement_bind_bytes(dst.cptr, pos,
-				(*C.cass_byte_t)(buf), C.size_t(len(val)))
+				(*C.cass_byte_t)(unsafe.Pointer(&val[0])), C.size_t(len(val)))
 		case *collectionTypedVal:
 			retc = C.cass_collection_append_bytes(dst.cptr,
-				(*C.cass_byte_t)(unsafe.Pointer(&val)), C.size_t(len(val)))
+				(*C.cass_byte_t)(unsafe.Pointer(&val[0])), C.size_t(len(val)))
 		}
 	}
 

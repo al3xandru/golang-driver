@@ -1,7 +1,6 @@
 package cassandra_test
 
 import (
-	"fmt"
 	"golang-driver/cassandra"
 	"golang-driver/cassandra/test"
 	"math/big"
@@ -71,43 +70,37 @@ func TestDecimalAndVarint(t *testing.T) {
 	}
 	defer test.TearDown(bignumbersCleanup)
 
+	testSelectDecimalVarint(t, session, 1, "123456789.12345678901234567890", "12345678901234567890")
+	testSelectDecimalVarint(t, session, 2, "-123456789.12345678901234567890", "-12345678901234567890")
 	testInsertDecimalVarintUsingStatement(t, session)
 	testInsertDecimalVarintUsingPreparedStatement(t, session)
-	testSelectDecimalVarint(t, session)
-	t.Error("log")
 }
 
-func testSelectDecimalVarint(t *testing.T, session *cassandra.Session) {
-	rows, err := session.Exec("SELECT dec, vint from golang_driver.bignumbers")
+func testSelectDecimalVarint(t *testing.T, session *cassandra.Session, id int, expDecimal string, expVarint string) {
+	rows, err := session.Exec("SELECT dec, vint from golang_driver.bignumbers where id = ?",
+		id)
 	if err != nil {
 		t.Error(err)
 		return
 	}
 
-	// if !rows.Next() {
-	// 	t.Errorf("expecting at least 1 row")
-	// 	return
-	// }
+	if !rows.Next() {
+		t.Errorf("expecting at least 1 row")
+		return
+	}
 	var dec cassandra.Decimal
 	var vint big.Int
 
-	for rows.Next() {
-		if err := rows.Scan(&dec, &vint); err != nil {
-			t.Error(err)
-			return
-		}
-		fmt.Printf("decimal: %s\n", dec.String())
-		fmt.Printf("varint : %s\n", vint.String())
+	if err := rows.Scan(&dec, &vint); err != nil {
+		t.Error(err)
+		return
 	}
-	// if dec.Scale != 20 {
-	// 	t.Errorf("decimal scale %s != 20", dec.String())
-	// }
-	// if dec.String() != "123456789.12345678901234567890" {
-	// 	t.Errorf("decimal %s != 123456789.12345678901234567890", dec.String())
-	// }
-	// if vint.String() != "12345678901234567890" {
-	// 	t.Errorf("varint %s != 12345678901234567890", vint.String())
-	// }
+	if expDecimal != dec.String() {
+		t.Errorf("decimal %s != %s", dec.String(), expDecimal)
+	}
+	if expVarint != vint.String() {
+		t.Errorf("varint %s != %s", vint.String(), expVarint)
+	}
 }
 
 func testInsertDecimalVarintUsingStatement(t *testing.T, session *cassandra.Session) {
@@ -117,6 +110,7 @@ func testInsertDecimalVarintUsingStatement(t *testing.T, session *cassandra.Sess
 		100, dec, vint); err != nil {
 		t.Error(err)
 	}
+	testSelectDecimalVarint(t, session, 100, "123456789.12345678901234567890", "12345678901234567890")
 
 	dec = createDecimal("-98765.43210", t)
 	vint = createVarint("-9876543210987654321", t)
@@ -124,6 +118,7 @@ func testInsertDecimalVarintUsingStatement(t *testing.T, session *cassandra.Sess
 		101, dec, vint); err != nil {
 		t.Error(err)
 	}
+	testSelectDecimalVarint(t, session, 101, "-98765.43210", "-9876543210987654321")
 }
 
 func testInsertDecimalVarintUsingPreparedStatement(t *testing.T, session *cassandra.Session) {
@@ -138,12 +133,14 @@ func testInsertDecimalVarintUsingPreparedStatement(t *testing.T, session *cassan
 	if _, err = pstmt.Exec(1000, dec, vint); err != nil {
 		t.Error(err)
 	}
+	testSelectDecimalVarint(t, session, 1000, "123456789.12345678901234567890", "12345678901234567890")
 
 	dec = createDecimal("-98765.43210", t)
 	vint = createVarint("-9876543210987654321", t)
 	if _, err = pstmt.Exec(1001, dec, vint); err != nil {
 		t.Error(err)
 	}
+	testSelectDecimalVarint(t, session, 1001, "-98765.43210", "-9876543210987654321")
 }
 
 func createDecimal(v string, t *testing.T) *cassandra.Decimal {

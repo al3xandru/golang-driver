@@ -354,11 +354,7 @@ func readVarint(value *C.CassValue, cassType C.CassValueType, dst interface{}) (
 			return false, nil
 		}
 		f, v, err := valAsBlob(value)
-		fmt.Printf(" readVarint(%v)\n", v)
-		if v[0] != 0 {
-			v[0] = ^v[0]
-		}
-		dst = dst.SetBytes(v)
+		import2Complement(v, dst)
 		return f, err
 	}
 	return true, fmt.Errorf("cannot read %s type into %T", cassTypeName(cassType),
@@ -380,10 +376,9 @@ func readDecimal(value *C.CassValue, cassType C.CassValueType, dst interface{}) 
 		case C.CASS_OK:
 			b := C.GoBytes(unsafe.Pointer(buf), C.int(sz))
 			bigint := big.NewInt(0)
-			bigint = bigint.SetBytes(b)
+			import2Complement(b, bigint)
 			dst.Value = bigint
 			dst.Scale = int32(sc)
-			fmt.Printf(" readDecimal(%v, %d)\n", b, dst.Scale)
 			return true, nil
 		case C.CASS_ERROR_LIB_NULL_VALUE:
 			return false, nil

@@ -8,6 +8,7 @@ import "C"
 import (
 	"errors"
 	"fmt"
+	"math/big"
 	"reflect"
 )
 
@@ -139,4 +140,48 @@ func newColumnError(rows *Rows, index int, v interface{}, err error) error {
 func async(f func() *C.struct_CassFuture_) *Future {
 	ptrFuture := f()
 	return &Future{cptr: ptrFuture}
+}
+
+func import2Complement(b []byte, dst *big.Int) *big.Int {
+	dst = dst.SetBytes(b)
+	if (b[0] & 0x80) == 0x80 {
+		sub := big.NewInt(8)
+		sub = sub.Mul(sub, big.NewInt(int64(len(b))))
+		sub = sub.Exp(big.NewInt(2), sub, big.NewInt(0))
+		dst = dst.Sub(dst, sub)
+	}
+
+	return dst
+}
+
+func export2Complement(src *big.Int) []byte {
+	switch src.Sign() {
+	case 0:
+		return []byte{0}
+	case -1:
+		bytesCount := src.BitLen()/8 + 1
+		for i := src.BitLen() - 1; i > -1; i-- {
+			if src.Bit(i) == 1 {
+				if i == (8*(bytesCount-1))-1 {
+					bytesCount--
+				}
+				break
+			}
+		}
+		add := big.NewInt(8)
+		add = add.Mul(add, big.NewInt(int64(bytesCount)))
+		add = add.Exp(big.NewInt(2), add, big.NewInt(0))
+		src = src.Add(src, add)
+		return src.Bytes()
+	default:
+		bytesCount := (src.BitLen() + 7) / 8
+		if src.Bit((8*bytesCount)-1) == 1 {
+			buf := make([]byte, bytesCount+1)
+			buf[0] = 0
+			copy(buf[1:], src.Bytes())
+			return buf
+		} else {
+			return src.Bytes()
+		}
+	}
 }
