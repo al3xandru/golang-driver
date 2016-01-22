@@ -112,7 +112,7 @@ See the tests in the main package for more examples.
 * [X] Advanced cluster configuration
 * [X] Async API
 * [X] Support for collections 
-* [ ] Missing C* types: `decimal`, `varint`
+* [X] Missing C* types: `decimal`, `varint`
 * [ ] Support for tuples
 * [ ] Support for UDTs
 * [ ] Named parameters
