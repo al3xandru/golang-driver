@@ -40,7 +40,6 @@ func (stmt *Statement) Exec() (*Rows, error) {
 	defer future.Close()
 
 	if err := future.Error(); err != nil {
-		// fmt.Printf("Execute: %s\r\n", err.Error())
 		return nil, err
 	}
 	return future.Result(), nil
@@ -48,13 +47,15 @@ func (stmt *Statement) Exec() (*Rows, error) {
 
 func (stmt *Statement) ExecAsync() *Future {
 	if stmt.consistency != unset {
-		if retc := C.cass_statement_set_consistency(stmt.cptr, stmt.consistency.toC()); retc != C.CASS_OK {
+		retc := C.cass_statement_set_consistency(stmt.cptr, stmt.consistency.toC())
+		if retc != C.CASS_OK {
 			// return an error Future
 			return &Future{err: newError(retc)}
 		}
 	}
 	if stmt.serialConsistency != unset {
-		if retc := C.cass_statement_set_serial_consistency(stmt.cptr, stmt.serialConsistency.toC()); retc != C.CASS_OK {
+		retc := C.cass_statement_set_serial_consistency(stmt.cptr, stmt.serialConsistency.toC())
+		if retc != C.CASS_OK {
 			// return an error Future
 			return &Future{err: newError(retc)}
 		}
