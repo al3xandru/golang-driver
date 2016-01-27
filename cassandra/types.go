@@ -233,19 +233,51 @@ func NewDecimal(val int64, scale int32) *Decimal {
 	return &Decimal{big.NewInt(val), scale}
 }
 
-// func NewDecimalFromFloat(val float64) *Decimal {
-// 	// this is ugly
-// 	s := strconv.FormatFloat(val, 'f', -1, 64)
-// 	d, err := ParseDecimal(s)
-// 	// this should never happen but guard
-// 	if err != nil {
-// 		panic(err)
-// 	}
-// 	return d
-// }
-
 func (d *Decimal) String() string {
 	s := d.Value.String()
 	pos := len(s) - int(d.Scale)
 	return fmt.Sprintf("%s.%s", s[0:pos], s[pos:])
+}
+
+type Tuple struct {
+	Kind   CassType
+	Values []interface{}
+	length int
+}
+
+func NewTuple(t CassType, args ...interface{}) *Tuple {
+	tuple := new(Tuple)
+	tuple.Kind = t
+	tuple.length = len(t.SubTypes)
+	tuple.Values = make([]interface{}, tuple.length)
+	if len(args) > 0 {
+		copy(tuple.Values, args)
+	}
+
+	return tuple
+}
+
+func (tuple *Tuple) Set(index int, value interface{}) *Tuple {
+	if index < 0 || index >= tuple.length {
+		panic(fmt.Sprintf("Tuple %s has only %d values", tuple.Kind.Name(), tuple.length))
+	}
+	tuple.Values[index] = value
+
+	return tuple
+}
+
+func (tuple *Tuple) Get(index int) interface{} {
+	if index < 0 || index >= tuple.length {
+		panic(fmt.Sprintf("Tuple %s has only %d values", tuple.Kind.Name(), tuple.length))
+	}
+
+	return tuple.Values[index]
+}
+
+func (tuple *Tuple) String() string {
+	if tuple.length == 0 {
+		return "()"
+	}
+	format := "(" + strings.Repeat("%v, ", tuple.length-1) + "%v)"
+	return fmt.Sprintf(format, tuple.Values...)
 }

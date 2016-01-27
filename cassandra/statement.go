@@ -76,6 +76,14 @@ func (stmt *Statement) bind(args ...interface{}) error {
 	return nil
 }
 
+func (stmt *Statement) dataType(index int) cassDataType {
+	if stmt.pstmt == nil {
+		return nil
+	}
+	return cassDataType(C.cass_prepared_parameter_data_type(stmt.pstmt.cptr,
+		C.size_t(index)))
+}
+
 func newSimpleStatement(session *Session, query string, paramLen int) *Statement {
 	cQuery := C.CString(query)
 	defer C.free(unsafe.Pointer(cQuery))

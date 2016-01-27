@@ -10,6 +10,213 @@ import (
 	"fmt"
 	"math/big"
 	"reflect"
+	"strings"
+)
+
+type CassType struct {
+	PrimaryType  int
+	SubTypes     []CassType
+	SubTypeNames map[string]int
+}
+
+func newCassType(kind int, subTypes ...int) CassType {
+	ctype := new(CassType)
+	ctype.PrimaryType = kind
+	if len(subTypes) > 0 {
+		subs := make([]CassType, len(subTypes))
+		for i, s := range subTypes {
+			subs[i] = newCassType(s)
+		}
+		ctype.SubTypes = subs
+	}
+	return *ctype
+}
+
+func CassTypeFromDataType(cdt cassDataType) CassType {
+	if cdt == nil {
+		return CASS_UNKNOWN
+	}
+	cvt := valueType(cdt)
+	switch cvt {
+	case CASS_VALUE_TYPE_LIST, CASS_VALUE_TYPE_SET:
+		ctype := new(CassType)
+		ctype.PrimaryType = int(cvt)
+		ctype.SubTypes = make([]CassType, 1)
+		ctype.SubTypes[0] = CassTypeFromDataType(C.cass_data_type_sub_data_type(cdt, 0))
+
+		return *ctype
+
+	case CASS_VALUE_TYPE_MAP:
+		ctype := new(CassType)
+		ctype.PrimaryType = CASS_VALUE_TYPE_MAP
+		ctype.SubTypes = make([]CassType, 2)
+		for i, _ := range ctype.SubTypes {
+			ctype.SubTypes[i] = CassTypeFromDataType(
+				C.cass_data_type_sub_data_type(cdt, C.size_t(i)))
+		}
+
+		return *ctype
+
+	case CASS_VALUE_TYPE_TUPLE:
+		ctype := new(CassType)
+		ctype.PrimaryType = CASS_VALUE_TYPE_TUPLE
+		ctype.SubTypes = make([]CassType, int(C.cass_data_sub_type_count(cdt)))
+		for i, _ := range ctype.SubTypes {
+			ctype.SubTypes[i] = CassTypeFromDataType(
+				C.cass_data_type_sub_data_type(cdt, C.size_t(i)))
+		}
+
+		return *ctype
+
+	// incomplete for now
+	case CASS_VALUE_TYPE_UDT:
+		return CASS_UDT
+
+	case CASS_VALUE_TYPE_ASCII:
+		return CASS_ASCII
+	case CASS_VALUE_TYPE_TEXT:
+		return CASS_TEXT
+	case CASS_VALUE_TYPE_VARCHAR:
+		return CASS_VARCHAR
+	case CASS_VALUE_TYPE_BIGINT:
+		return CASS_BIGINT
+	case CASS_VALUE_TYPE_INT:
+		return CASS_INT
+	case CASS_VALUE_TYPE_SMALL_INT:
+		return CASS_SMALLINT
+	case CASS_VALUE_TYPE_TINY_INT:
+		return CASS_TINYINIT
+	case CASS_VALUE_TYPE_VARINT:
+		return CASS_VARINT
+	case CASS_VALUE_TYPE_BLOB:
+		return CASS_BLOB
+	case CASS_VALUE_TYPE_BOOLEAN:
+		return CASS_BOOLEAN
+	case CASS_VALUE_TYPE_DECIMAL:
+		return CASS_DECIMAL
+	case CASS_VALUE_TYPE_DOUBLE:
+		return CASS_DOUBLE
+	case CASS_VALUE_TYPE_FLOAT:
+		return CASS_FLOAT
+	case CASS_VALUE_TYPE_TIMESTAMP:
+		return CASS_TIMESTAMP
+	case CASS_VALUE_TYPE_DATE:
+		return CASS_DATE
+	case CASS_VALUE_TYPE_TIME:
+		return CASS_TIME
+	case CASS_VALUE_TYPE_UUID:
+		return CASS_UUID
+	case CASS_VALUE_TYPE_TIMEUUID:
+		return CASS_TIMEUUID
+	case CASS_VALUE_TYPE_INET:
+		return CASS_INET
+	// counter, custom
+	default:
+		return newCassType(int(cvt))
+	}
+}
+
+// Specialize a collection type (list, set, map, tuple) with the
+// type(s) of its elements
+func (ct CassType) Subtype(subTypes ...CassType) CassType {
+	return CassType{PrimaryType: ct.PrimaryType, SubTypes: subTypes}
+}
+
+func (ct *CassType) Name() string {
+	switch ct.PrimaryType {
+	case CASS_VALUE_TYPE_LIST:
+		return fmt.Sprintf("list<%s>", ct.SubTypes[0].Name())
+	case CASS_VALUE_TYPE_SET:
+		return fmt.Sprintf("set<%s>", ct.SubTypes[0].Name())
+	case CASS_VALUE_TYPE_MAP:
+		return fmt.Sprintf("map<%s, %s>", ct.SubTypes[0].Name(),
+			ct.SubTypes[1].Name())
+	case CASS_VALUE_TYPE_TUPLE:
+		names := make([]string, len(ct.SubTypes))
+		for i, st := range ct.SubTypes {
+			names[i] = st.Name()
+		}
+		return fmt.Sprintf("tuple<%s>", strings.Join(names, ", "))
+	case CASS_VALUE_TYPE_ASCII:
+		return "ascii"
+	case CASS_VALUE_TYPE_TEXT:
+		return "text"
+	case CASS_VALUE_TYPE_VARCHAR:
+		return "varchar"
+	case CASS_VALUE_TYPE_BIGINT:
+		return "bigint"
+	case CASS_VALUE_TYPE_INT:
+		return "int"
+	case CASS_VALUE_TYPE_SMALL_INT:
+		return "smallint"
+	case CASS_VALUE_TYPE_TINY_INT:
+		return "tinyint"
+	case CASS_VALUE_TYPE_VARINT:
+		return "varint"
+	case CASS_VALUE_TYPE_BLOB:
+		return "blob"
+	case CASS_VALUE_TYPE_BOOLEAN:
+		return "boolean"
+	case CASS_VALUE_TYPE_COUNTER:
+		return "counter"
+	case CASS_VALUE_TYPE_DECIMAL:
+		return "decimal"
+	case CASS_VALUE_TYPE_DOUBLE:
+		return "double"
+	case CASS_VALUE_TYPE_FLOAT:
+		return "float"
+	case CASS_VALUE_TYPE_TIMESTAMP:
+		return "timestamp"
+	case CASS_VALUE_TYPE_DATE:
+		return "date"
+	case CASS_VALUE_TYPE_TIME:
+		return "time"
+	case CASS_VALUE_TYPE_UUID:
+		return "uuid"
+	case CASS_VALUE_TYPE_TIMEUUID:
+		return "timeuuid"
+	case CASS_VALUE_TYPE_INET:
+		return "inet"
+	case CASS_VALUE_TYPE_UDT:
+		return "udt"
+	case CASS_VALUE_TYPE_CUSTOM:
+		return "custom"
+	default:
+		return "UNKNOWN"
+	}
+}
+
+func (ct *CassType) String() string {
+	return ct.Name()
+}
+
+var (
+	CASS_UNKNOWN   = newCassType(CASS_VALUE_TYPE_UNKNOWN)
+	CASS_ASCII     = newCassType(CASS_VALUE_TYPE_ASCII)
+	CASS_BIGINT    = newCassType(CASS_VALUE_TYPE_BIGINT)
+	CASS_BLOB      = newCassType(CASS_VALUE_TYPE_BLOB)
+	CASS_BOOLEAN   = newCassType(CASS_VALUE_TYPE_BOOLEAN)
+	CASS_DECIMAL   = newCassType(CASS_VALUE_TYPE_DECIMAL)
+	CASS_DOUBLE    = newCassType(CASS_VALUE_TYPE_DOUBLE)
+	CASS_FLOAT     = newCassType(CASS_VALUE_TYPE_FLOAT)
+	CASS_INT       = newCassType(CASS_VALUE_TYPE_INT)
+	CASS_TEXT      = newCassType(CASS_VALUE_TYPE_TEXT)
+	CASS_TIMESTAMP = newCassType(CASS_VALUE_TYPE_TIMESTAMP)
+	CASS_UUID      = newCassType(CASS_VALUE_TYPE_UUID)
+	CASS_VARCHAR   = newCassType(CASS_VALUE_TYPE_VARCHAR)
+	CASS_VARINT    = newCassType(CASS_VALUE_TYPE_VARINT)
+	CASS_TIMEUUID  = newCassType(CASS_VALUE_TYPE_TIMEUUID)
+	CASS_INET      = newCassType(CASS_VALUE_TYPE_INET)
+	CASS_DATE      = newCassType(CASS_VALUE_TYPE_DATE)
+	CASS_TIME      = newCassType(CASS_VALUE_TYPE_TIME)
+	CASS_SMALLINT  = newCassType(CASS_VALUE_TYPE_SMALL_INT)
+	CASS_TINYINIT  = newCassType(CASS_VALUE_TYPE_TINY_INT)
+	// collections
+	CASS_LIST  = newCassType(CASS_VALUE_TYPE_LIST)
+	CASS_SET   = newCassType(CASS_VALUE_TYPE_SET)
+	CASS_MAP   = newCassType(CASS_VALUE_TYPE_MAP)
+	CASS_TUPLE = newCassType(CASS_VALUE_TYPE_TUPLE)
+	CASS_UDT   = newCassType(CASS_VALUE_TYPE_UDT)
 )
 
 type cassDataType *C.struct_CassDataType_
@@ -20,14 +227,6 @@ func valueType(cdt cassDataType) C.CassValueType {
 	}
 
 	return C.cass_data_type_type(cdt)
-}
-
-func (stmt *Statement) dataType(index int) cassDataType {
-	if stmt.pstmt == nil {
-		return nil
-	}
-	return cassDataType(C.cass_prepared_parameter_data_type(stmt.pstmt.cptr,
-		C.size_t(index)))
 }
 
 const (
@@ -133,7 +332,7 @@ func newColumnError(rows *Rows, index int, v interface{}, err error) error {
 		index,
 		argType,
 		columnName,
-		columnType)
+		columnType.Name())
 	return errors.New(errMsg)
 }
 
