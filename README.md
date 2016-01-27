@@ -116,6 +116,7 @@ See the tests in the main package for more examples.
 * [ ] Support for tuples
 * [ ] Support for UDTs
 * [ ] Named parameters
+* [ ] Unset (v4) vs null parameters
 
 #### Notes
 
