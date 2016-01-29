@@ -26,6 +26,9 @@ func TestTime(t *testing.T) {
 		t.Fatalf("%d != %d", t1, t2)
 	}
 
+	if t2.Raw() != 33011345678900 {
+		t.Errorf("Raw %d != 0", t2.Raw())
+	}
 	if t2.Hours() != 9 {
 		t.Errorf("Hours: 9 != %d", t2.Hours())
 	}
@@ -37,6 +40,9 @@ func TestTime(t *testing.T) {
 	}
 	if t2.Nanoseconds() != 345678900 {
 		t.Errorf("Nanos: 345678900 != %d", t2.Nanoseconds())
+	}
+	if t2.NativeString() != "'09:10:11.345678900'" {
+		t.Errorf("Native %s != '09:10:11.345678900'", t2.NativeString())
 	}
 }
 

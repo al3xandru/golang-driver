@@ -183,6 +183,19 @@ func (t Time) Nanoseconds() uint {
 	return uint(math.Remainder(float64(t), float64(time.Second)))
 }
 
+func (t Time) Raw() int64 {
+	return int64(t)
+}
+
+func (t Time) String() string {
+	return fmt.Sprintf("%02d:%02d:%02d.%d", t.Hours(), t.Minutes(), t.Seconds(),
+		t.Nanoseconds())
+}
+
+func (t Time) NativeString() string {
+	return fmt.Sprintf("'%s'", t.String())
+}
+
 // Used to represent both a Cassandra `uuid` (UUID v4)
 // and `timeuuid` (UUID v1).
 //
