@@ -15,6 +15,8 @@ import (
 	"time"
 )
 
+var Epoch = time.Date(1970, 1, 1, 0, 0, 0, 0, time.UTC)
+
 // Cassandra `timestamp` represents a date plus time,
 // encoded as 8 bytes since epoch
 type Timestamp struct {
@@ -49,13 +51,17 @@ func (t Timestamp) Raw() int64 {
 // Cassandra Date is a 32-bit unsigned integer representing
 // the number of days with Epoch (1970-1-1) at the center of the range
 type Date struct {
-	Days uint32
+	days uint32
 }
 
-// Only the year, month, day part are set in the returned time.Time
-func (d *Date) Time() time.Time {
-	var v int64 = int64(d.Days) - math.MaxInt32 - 1
-	return Epoch.Add(time.Duration(v*24) * time.Hour)
+// Create a new Date.
+func NewDate(year int, month time.Month, day int) Date {
+	date := time.Date(year, month, day, 0, 0, 0, 0, time.UTC)
+	d := date.Sub(Epoch)
+	var days int64 = int64(d.Hours()) / 24
+	var udays = uint32(days + math.MaxInt32 + 1)
+
+	return Date{udays}
 }
 
 var datePatterns = []string{
@@ -65,7 +71,15 @@ var datePatterns = []string{
 	"2006-1-2",
 }
 
-func ParseDate(s string) (*Date, error) {
+// Creates a new Date value from the string representation.
+// The accepted formats are:
+// * yyyy-mm-dd
+// * yyyy-m-d
+// * yyyy-mm-d
+// * yyyy-m-dd
+// If the value cannot be parsed to a valid date, this function
+// return a non-nil error
+func ParseDate(s string) (Date, error) {
 	var t time.Time
 	var err error
 	for _, p := range datePatterns {
@@ -75,25 +89,28 @@ func ParseDate(s string) (*Date, error) {
 		}
 	}
 	if err != nil {
-		return nil, err
+		return Date{}, err
 	}
 	return NewDate(t.Year(), t.Month(), t.Day()), nil
 }
 
-func (d *Date) String() string {
+// Only the year, month, day part are set in the returned time.Time
+func (d Date) Time() time.Time {
+	var v int64 = int64(d.days) - math.MaxInt32 - 1
+	return Epoch.Add(time.Duration(v*24) * time.Hour)
+}
+
+func (d Date) Raw() uint32 {
+	return d.days
+}
+
+func (d Date) String() string {
 	return d.Time().Format("2006-01-02")
 }
 
-var Epoch = time.Date(1970, 1, 1, 0, 0, 0, 0, time.UTC)
-
-// Create a new Date.
-func NewDate(year int, month time.Month, day int) *Date {
-	date := time.Date(year, month, day, 0, 0, 0, 0, time.UTC)
-	d := date.Sub(Epoch)
-	var days int64 = int64(d.Hours()) / 24
-	var udays = uint32(days + math.MaxInt32 + 1)
-
-	return &Date{udays}
+// Returns a representation that can be used directly in CQL
+func (d Date) NativeString() string {
+	return fmt.Sprintf("'%d'", d.days)
 }
 
 // Cassandra `time` type represents a time of day

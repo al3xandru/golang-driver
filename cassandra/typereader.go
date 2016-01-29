@@ -589,7 +589,7 @@ func readDate(value *C.CassValue, cassType CassType, dst interface{}) (bool, err
 			return false, nil
 		}
 		f, v, err := valAsInt(value)
-		dst.Days = uint32(v)
+		dst.days = uint32(v)
 		return f, err
 	case *uint32:
 		if isNull(value) {

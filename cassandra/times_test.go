@@ -59,8 +59,8 @@ func TestDate(t *testing.T) {
 	}
 
 	d2 := cassandra.NewDate(1970, 1, 1)
-	if float64(d2.Days) != math.Pow(2, 31) {
-		t.Errorf("Center %d != %d", math.Pow(2, 31), d2.Days)
+	if float64(d2.Raw()) != math.Pow(2, 31) {
+		t.Errorf("Center %d != %d", math.Pow(2, 31), d2.Raw())
 	}
 
 	d2, err := cassandra.ParseDate("2015-12-20")
@@ -68,7 +68,7 @@ func TestDate(t *testing.T) {
 		t.Fatal(err)
 	}
 	if !d1.Time().Equal(d2.Time()) {
-		t.Errorf("%d = %d (%s != %s)", d1.Days, d2.Days,
+		t.Errorf("%d = %d (%s != %s)", d1.Raw(), d2.Raw(),
 			d1.Time(), d2.Time())
 	}
 	if _, err := cassandra.ParseDate("2016-1-1"); err != nil {

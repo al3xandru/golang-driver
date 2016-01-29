@@ -98,8 +98,8 @@ func TestMissingValues(t *testing.T) {
 		if ts.Raw() != 0 {
 			t.Errorf("default timestamp should be 0 != %d", ts.Raw())
 		}
-		if td.Days != 0 {
-			t.Errorf("default date should be 0 != %d", td.Days)
+		if td.Raw() != 0 {
+			t.Errorf("default date should be 0 != %d", td.Raw())
 		}
 	} else {
 		t.Fatal("There must be 1 row in golang_driver.alltypes")

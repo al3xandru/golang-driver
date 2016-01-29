@@ -71,9 +71,9 @@ func testInsertListsUsingPreparedStatement(t *testing.T, session *cassandra.Sess
 	}
 
 	dates := make([]cassandra.Date, 3)
-	dates[0] = *cassandra.NewDate(2016, 1, 15)
-	dates[1] = *cassandra.NewDate(2016, 1, 15)
-	dates[2] = *cassandra.NewDate(2016, 1, 15)
+	dates[0] = cassandra.NewDate(2016, 1, 15)
+	dates[1] = cassandra.NewDate(2016, 1, 15)
+	dates[2] = cassandra.NewDate(2016, 1, 15)
 
 	_, err = prepStmt.Exec(2, []int{1, 2, 3}, []string{"a", "b", "c"}, dates)
 	if err != nil {
@@ -87,9 +87,9 @@ func testInsertListsUsingPreparedStatement(t *testing.T, session *cassandra.Sess
 
 func testInsertListsUsingStatement(t *testing.T, session *cassandra.Session) {
 	dates := make([]cassandra.Date, 3)
-	dates[0] = *cassandra.NewDate(2016, 1, 15)
-	dates[1] = *cassandra.NewDate(2016, 1, 15)
-	dates[2] = *cassandra.NewDate(2016, 1, 15)
+	dates[0] = cassandra.NewDate(2016, 1, 15)
+	dates[1] = cassandra.NewDate(2016, 1, 15)
+	dates[2] = cassandra.NewDate(2016, 1, 15)
 
 	_, err := session.Exec("INSERT INTO golang_driver.listtypes (id, intlist, textlist, datelist) VALUES (?, ?, ?, ?)",
 		int32(4), []int32{7, 8, 9}, []string{"g", "h", "i"}, dates)

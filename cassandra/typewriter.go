@@ -343,7 +343,7 @@ func toText(value interface{}, cassType CassType) (*primitiveTypedVal, error) {
 func toDate(value interface{}, cassType CassType) (*primitiveTypedVal, error) {
 	switch value := value.(type) {
 	case Date:
-		return &primitiveTypedVal{value.Days, cassType}, nil
+		return &primitiveTypedVal{value.days, cassType}, nil
 	case uint32:
 		return &primitiveTypedVal{value, cassType}, nil
 	case string:
@@ -352,7 +352,7 @@ func toDate(value interface{}, cassType CassType) (*primitiveTypedVal, error) {
 			return nil, fmt.Errorf("cannot convert %T (%s) into %s",
 				value, value, cassType.Name())
 		}
-		return &primitiveTypedVal{date.Days, cassType}, nil
+		return &primitiveTypedVal{date.days, cassType}, nil
 	}
 
 	rVal := reflect.ValueOf(value)
