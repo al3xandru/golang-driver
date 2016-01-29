@@ -149,7 +149,7 @@ func newCassTypedVal(value interface{}, dataType CassType) (typedValue, error) {
 		return toInet(value, CASS_INET)
 	case []byte:
 		return toBlob(value, CASS_BLOB)
-	case *internalSet:
+	case setmarker:
 		return toSet(value.value, CASS_SET)
 	}
 	// last attempt
@@ -503,7 +503,7 @@ func toMap(value interface{}, dataType CassType) (*collectionTypedVal, error) {
 
 func toSet(value interface{}, dataType CassType) (*collectionTypedVal, error) {
 	switch value := value.(type) {
-	case *internalSet:
+	case setmarker:
 		return toSet(value.value, dataType)
 	}
 

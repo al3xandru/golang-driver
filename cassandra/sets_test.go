@@ -94,10 +94,17 @@ func testInsertSetUsingStatementWithSet(t *testing.T, session *cassandra.Session
 		7, cassandra.Set(map[int]bool{70: true, 71: true, 72: true})); err != nil {
 		t.Error(err)
 	}
+	// Set() can wrap only arrays, slices, maps
+	if _, err = session.Exec("INSERT INTO golang_driver.sets (id, intset) VALUES (?, ?)",
+		8, cassandra.Set("a string")); err == nil {
+		t.Error("cassandra.Set() can wrap anything, but it should result in an error")
+	} else {
+		t.Log(err)
+	}
 }
 
 func testWeirdBehaviorForSets(t *testing.T, session *cassandra.Session) {
-	t.Skipf("These 2 Set tests are misbehaving for unclear reasons")
+	t.Skipf("This Set test is misbehaving for unclear reasons")
 	var err error
 	if _, err = session.Exec("INSERT INTO golang_driver.sets (id, intset) VALUES (?, ?)",
 		4, []int{40, 41, 42}); err == nil {
@@ -106,12 +113,6 @@ func testWeirdBehaviorForSets(t *testing.T, session *cassandra.Session) {
 		t.Log(err)
 	}
 
-	if _, err = session.Exec("INSERT INTO golang_driver.sets (id, intset) VALUES (?, ?)",
-		8, cassandra.Set("a string")); err == nil {
-		t.Error("cassandra.Set() can wrap anything, but it should result in an error")
-	} else {
-		t.Log(err)
-	}
 }
 
 var (

@@ -242,11 +242,15 @@ func (u UUID) Raw() [16]byte {
 	return [16]byte(u)
 }
 
-func Set(val interface{}) *internalSet {
-	return &internalSet{val}
+// Utility method allowing to mark an array, slice, or map as a value
+// to be written as Cassandra `set` from simple statements (in which
+// automatic conversions wouldn't recognize those types as potential
+// sets without incurring a significant penalty)
+func Set(val interface{}) setmarker {
+	return setmarker{val}
 }
 
-type internalSet struct {
+type setmarker struct {
 	value interface{}
 }
 

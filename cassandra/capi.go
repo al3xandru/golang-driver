@@ -125,12 +125,21 @@ func (ct CassType) Subtype(subTypes ...CassType) CassType {
 func (ct *CassType) Name() string {
 	switch ct.PrimaryType {
 	case CASS_VALUE_TYPE_LIST:
-		return fmt.Sprintf("list<%s>", ct.SubTypes[0].Name())
+		if len(ct.SubTypes) > 0 {
+			return fmt.Sprintf("list<%s>", ct.SubTypes[0].Name())
+		}
+		return "list"
 	case CASS_VALUE_TYPE_SET:
-		return fmt.Sprintf("set<%s>", ct.SubTypes[0].Name())
+		if len(ct.SubTypes) > 0 {
+			return fmt.Sprintf("set<%s>", ct.SubTypes[0].Name())
+		}
+		return "set"
 	case CASS_VALUE_TYPE_MAP:
-		return fmt.Sprintf("map<%s, %s>", ct.SubTypes[0].Name(),
-			ct.SubTypes[1].Name())
+		if len(ct.SubTypes) > 1 {
+			return fmt.Sprintf("map<%s, %s>", ct.SubTypes[0].Name(),
+				ct.SubTypes[1].Name())
+		}
+		return "map"
 	case CASS_VALUE_TYPE_TUPLE:
 		names := make([]string, len(ct.SubTypes))
 		for i, st := range ct.SubTypes {
