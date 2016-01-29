@@ -234,6 +234,14 @@ func (u UUID) String() string {
 		u[:4], u[4:6], u[6:8], u[8:10], u[10:])
 }
 
+func (u UUID) NativeString() string {
+	return u.String()
+}
+
+func (u UUID) Raw() [16]byte {
+	return [16]byte(u)
+}
+
 func Set(val interface{}) *internalSet {
 	return &internalSet{val}
 }
