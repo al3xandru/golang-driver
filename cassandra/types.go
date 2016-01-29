@@ -18,15 +18,32 @@ import (
 // Cassandra `timestamp` represents a date plus time,
 // encoded as 8 bytes since epoch
 type Timestamp struct {
-	SecondsSinceEpoch int64
+	secondsSinceEpoch int64
 }
 
-func (t *Timestamp) Time() time.Time {
-	return Epoch.Add(time.Duration(t.SecondsSinceEpoch) * time.Second)
+func NewTimestampFromTime(t time.Time) Timestamp {
+	return Timestamp{int64(t.Sub(Epoch).Seconds())}
 }
 
-func NewTimestamp(t time.Time) *Timestamp {
-	return &Timestamp{int64(t.Sub(Epoch).Seconds())}
+func NewTimestamp(secondsFromEpoch int64) Timestamp {
+	return Timestamp{secondsFromEpoch}
+}
+
+func (t Timestamp) Time() time.Time {
+	return Epoch.Add(time.Duration(t.secondsSinceEpoch) * time.Second)
+}
+
+func (t Timestamp) String() string {
+	return t.Time().String()
+}
+
+func (t Timestamp) NativeString() string {
+	// FIXME: should return the value as represented in CQL
+	return fmt.Sprintf("%d", t.secondsSinceEpoch)
+}
+
+func (t Timestamp) Raw() int64 {
+	return t.secondsSinceEpoch
 }
 
 // Cassandra Date is a 32-bit unsigned integer representing

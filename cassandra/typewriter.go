@@ -384,7 +384,7 @@ func toTime(value interface{}, cassType CassType) (*primitiveTypedVal, error) {
 func toTimestamp(value interface{}, cassType CassType) (*primitiveTypedVal, error) {
 	switch value := value.(type) {
 	case Timestamp:
-		return &primitiveTypedVal{value.SecondsSinceEpoch, cassType}, nil
+		return &primitiveTypedVal{value.secondsSinceEpoch, cassType}, nil
 	case int64:
 		return &primitiveTypedVal{value, cassType}, nil
 	}

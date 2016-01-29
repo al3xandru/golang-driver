@@ -95,8 +95,8 @@ func TestMissingValues(t *testing.T) {
 		if tm != 0 {
 			t.Errorf("default time should be 0 != %d", tm)
 		}
-		if ts.SecondsSinceEpoch != 0 {
-			t.Errorf("default timestamp should be 0 != %d", ts.SecondsSinceEpoch)
+		if ts.Raw() != 0 {
+			t.Errorf("default timestamp should be 0 != %d", ts.Raw())
 		}
 		if td.Days != 0 {
 			t.Errorf("default date should be 0 != %d", td.Days)

@@ -41,11 +41,11 @@ func TestTime(t *testing.T) {
 }
 
 func TestTimestamp(t *testing.T) {
-	ts1 := &cassandra.Timestamp{1450606299}
-	ts2 := cassandra.NewTimestamp(time.Date(2015, 12, 20, 10, 11, 39, 0, time.UTC))
+	ts1 := cassandra.NewTimestamp(1450606299)
+	ts2 := cassandra.NewTimestampFromTime(time.Date(2015, 12, 20, 10, 11, 39, 0, time.UTC))
 
 	if !ts1.Time().Equal(ts2.Time()) {
-		t.Fatalf("%d != %d (%s != %s)", ts1.SecondsSinceEpoch, ts2.SecondsSinceEpoch,
+		t.Fatalf("%d != %d (%s != %s)", ts1.Raw(), ts2.Raw(),
 			ts1.Time().String(), ts2.Time().String())
 	}
 }
@@ -108,8 +108,8 @@ func TestTimeTypes(t *testing.T) {
 	if tt != expectedTime {
 		t.Errorf("%02d:%02d:%02d.%d", tt.Hours(), tt.Minutes(), tt.Seconds(), tt.Nanoseconds())
 	}
-	if ts.SecondsSinceEpoch != 1450606299 {
-		t.Errorf("Timestamp 1450606299 != %d (%s)", ts.SecondsSinceEpoch, ts.Time())
+	if ts.Raw() != 1450606299 {
+		t.Errorf("Timestamp 1450606299 != %d (%s)", ts.Raw(), ts.Time())
 	}
 
 	// access as raw values

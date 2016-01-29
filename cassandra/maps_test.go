@@ -4,7 +4,6 @@ import (
 	"golang-driver/cassandra"
 	"golang-driver/cassandra/test"
 	"testing"
-	"time"
 )
 
 func TestMaps(t *testing.T) {
@@ -38,10 +37,10 @@ func TestMaps(t *testing.T) {
 			len(vals), vals)
 	}
 
-	timestamp := time.Unix(1451213010, 0)
-	timestampKey := cassandra.NewTimestamp(timestamp)
-	if vals[*timestampKey] != 99.99 {
-		t.Errorf("m[141213010] 99.99 != %.2f", vals[*timestampKey])
+	// timestamp := time.Unix(1451213010, 0)
+	timestampKey := cassandra.NewTimestamp(1451213010)
+	if vals[timestampKey] != 99.99 {
+		t.Errorf("m[141213010] 99.99 != %.2f", vals[timestampKey])
 	}
 }
 

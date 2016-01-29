@@ -630,7 +630,7 @@ func readTimestamp(value *C.CassValue, cassType CassType, dst interface{}) (bool
 			return false, nil
 		}
 		f, v, err := valAsInt(value)
-		dst.SecondsSinceEpoch = v
+		dst.secondsSinceEpoch = v
 		return f, err
 	case *int64:
 		if isNull(value) {
