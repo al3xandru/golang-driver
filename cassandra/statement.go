@@ -5,7 +5,10 @@ package cassandra
 // #include <stdlib.h>
 // #include <cassandra.h>
 import "C"
-import "unsafe"
+import (
+	"fmt"
+	"unsafe"
+)
 
 type Statement struct {
 	cptr              *C.struct_CassStatement_
@@ -67,6 +70,7 @@ func (stmt *Statement) ExecAsync() *Future {
 }
 
 func (stmt *Statement) bind(args ...interface{}) error {
+	fmt.Printf("statement.bind(%v)\n", args)
 	stmt.Args = args
 	for i, v := range args {
 		if err := write(stmt, v, i, stmt.dataType(i)); err != nil {
@@ -76,12 +80,13 @@ func (stmt *Statement) bind(args ...interface{}) error {
 	return nil
 }
 
-func (stmt *Statement) dataType(index int) cassDataType {
+func (stmt *Statement) dataType(index int) CassType {
 	if stmt.pstmt == nil {
-		return nil
+		return CASS_UNKNOWN
 	}
-	return cassDataType(C.cass_prepared_parameter_data_type(stmt.pstmt.cptr,
-		C.size_t(index)))
+	return CassTypeFromDataType(
+		cassDataType(C.cass_prepared_parameter_data_type(stmt.pstmt.cptr,
+			C.size_t(index))))
 }
 
 func newSimpleStatement(session *Session, query string, paramLen int) *Statement {

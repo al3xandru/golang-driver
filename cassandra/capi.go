@@ -186,6 +186,21 @@ func (ct *CassType) Name() string {
 	}
 }
 
+func (ct *CassType) Eq(other CassType) bool {
+	if ct.PrimaryType != other.PrimaryType {
+		return false
+	}
+	if len(ct.SubTypes) != len(other.SubTypes) {
+		return false
+	}
+	for idx, _ := range ct.SubTypes {
+		if !ct.SubTypes[idx].Eq(other.SubTypes[idx]) {
+			return false
+		}
+	}
+	return true
+}
+
 func (ct *CassType) String() string {
 	return ct.Name()
 }

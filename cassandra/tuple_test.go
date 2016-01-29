@@ -76,6 +76,7 @@ func testSelectTuple(t *testing.T, s *cassandra.Session, id int) {
 }
 
 func testInsertTupleUsingStatement(t *testing.T, s *cassandra.Session) {
+	t.Skip()
 	tuple := cassandra.NewTuple(cassandra.CASS_TUPLE.Subtype(cassandra.CASS_BOOLEAN, cassandra.CASS_INT, cassandra.CASS_TEXT), false, 42, "statement")
 	if _, err := s.Exec("INSERT INTO golang_driver.tuples (id, tpl) VALUES (?, ?)",
 		100, tuple); err != nil {
@@ -87,6 +88,7 @@ func testInsertTupleUsingStatement(t *testing.T, s *cassandra.Session) {
 }
 
 func testInsertTupleUsingPreparedStatement(t *testing.T, s *cassandra.Session) {
+	t.Skip()
 	pstmt, err := s.Prepare("INSERT INTO golang_driver.tuples (id, tpl) VALUES (?, ?)")
 	if err != nil {
 		t.Error(err)
