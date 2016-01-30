@@ -15,6 +15,123 @@ import (
 	"time"
 )
 
+// A CassType represents a specific Cassandra data type.
+// Collection types (list, set, map, tuple, UDTs) have subtypes
+// specifying the data type of their elements.
+type CassType struct {
+	primary  int
+	subtypes []CassType
+}
+
+// Predefined CassTypes for all known Cassandra data types.
+var (
+	CUnknown   = newCassType(CASS_VALUE_TYPE_UNKNOWN)
+	CAscii     = newCassType(CASS_VALUE_TYPE_ASCII)
+	CBigInt    = newCassType(CASS_VALUE_TYPE_BIGINT)
+	CBlob      = newCassType(CASS_VALUE_TYPE_BLOB)
+	CBoolean   = newCassType(CASS_VALUE_TYPE_BOOLEAN)
+	CDecimal   = newCassType(CASS_VALUE_TYPE_DECIMAL)
+	CDouble    = newCassType(CASS_VALUE_TYPE_DOUBLE)
+	CFloat     = newCassType(CASS_VALUE_TYPE_FLOAT)
+	CInt       = newCassType(CASS_VALUE_TYPE_INT)
+	CText      = newCassType(CASS_VALUE_TYPE_TEXT)
+	CTimestamp = newCassType(CASS_VALUE_TYPE_TIMESTAMP)
+	CUuid      = newCassType(CASS_VALUE_TYPE_UUID)
+	CVarchar   = newCassType(CASS_VALUE_TYPE_VARCHAR)
+	CVarint    = newCassType(CASS_VALUE_TYPE_VARINT)
+	CTimeuuid  = newCassType(CASS_VALUE_TYPE_TIMEUUID)
+	CInet      = newCassType(CASS_VALUE_TYPE_INET)
+	CDate      = newCassType(CASS_VALUE_TYPE_DATE)
+	CTime      = newCassType(CASS_VALUE_TYPE_TIME)
+	CSmallInt  = newCassType(CASS_VALUE_TYPE_SMALL_INT)
+	CTinyInt   = newCassType(CASS_VALUE_TYPE_TINY_INT)
+	// collections
+	CList  = newCassType(CASS_VALUE_TYPE_LIST)
+	CSet   = newCassType(CASS_VALUE_TYPE_SET)
+	CMap   = newCassType(CASS_VALUE_TYPE_MAP)
+	CTuple = newCassType(CASS_VALUE_TYPE_TUPLE)
+	CUdt   = newCassType(CASS_VALUE_TYPE_UDT)
+)
+
+// Specialize a collection type (list, set, map, tuple) with the
+// type(s) of its elements
+func (ct CassType) Specialize(subTypes ...CassType) CassType {
+	return CassType{primary: ct.primary, subtypes: subTypes}
+}
+
+func (ct CassType) String() string {
+	switch ct.primary {
+	case CASS_VALUE_TYPE_LIST:
+		if len(ct.subtypes) > 0 {
+			return fmt.Sprintf("list<%s>", ct.subtypes[0].String())
+		}
+		return "list<?>"
+	case CASS_VALUE_TYPE_SET:
+		if len(ct.subtypes) > 0 {
+			return fmt.Sprintf("set<%s>", ct.subtypes[0].String())
+		}
+		return "set<?>"
+	case CASS_VALUE_TYPE_MAP:
+		if len(ct.subtypes) > 1 {
+			return fmt.Sprintf("map<%s, %s>", ct.subtypes[0].String(),
+				ct.subtypes[1].String())
+		}
+		return "map<?, ?>"
+	case CASS_VALUE_TYPE_TUPLE:
+		names := make([]string, len(ct.subtypes))
+		for i, st := range ct.subtypes {
+			names[i] = st.String()
+		}
+		return fmt.Sprintf("tuple<%s>", strings.Join(names, ", "))
+	case CASS_VALUE_TYPE_ASCII:
+		return "ascii"
+	case CASS_VALUE_TYPE_TEXT:
+		return "text"
+	case CASS_VALUE_TYPE_VARCHAR:
+		return "varchar"
+	case CASS_VALUE_TYPE_BIGINT:
+		return "bigint"
+	case CASS_VALUE_TYPE_INT:
+		return "int"
+	case CASS_VALUE_TYPE_SMALL_INT:
+		return "smallint"
+	case CASS_VALUE_TYPE_TINY_INT:
+		return "tinyint"
+	case CASS_VALUE_TYPE_VARINT:
+		return "varint"
+	case CASS_VALUE_TYPE_BLOB:
+		return "blob"
+	case CASS_VALUE_TYPE_BOOLEAN:
+		return "boolean"
+	case CASS_VALUE_TYPE_COUNTER:
+		return "counter"
+	case CASS_VALUE_TYPE_DECIMAL:
+		return "decimal"
+	case CASS_VALUE_TYPE_DOUBLE:
+		return "double"
+	case CASS_VALUE_TYPE_FLOAT:
+		return "float"
+	case CASS_VALUE_TYPE_TIMESTAMP:
+		return "timestamp"
+	case CASS_VALUE_TYPE_DATE:
+		return "date"
+	case CASS_VALUE_TYPE_TIME:
+		return "time"
+	case CASS_VALUE_TYPE_UUID:
+		return "uuid"
+	case CASS_VALUE_TYPE_TIMEUUID:
+		return "timeuuid"
+	case CASS_VALUE_TYPE_INET:
+		return "inet"
+	case CASS_VALUE_TYPE_UDT:
+		return "udt"
+	case CASS_VALUE_TYPE_CUSTOM:
+		return "custom"
+	default:
+		return "UNKNOWN"
+	}
+}
+
 var Epoch = time.Date(1970, 1, 1, 0, 0, 0, 0, time.UTC)
 
 // Cassandra `timestamp` represents a date plus time,
@@ -311,7 +428,7 @@ type Tuple struct {
 func NewTuple(t CassType, args ...interface{}) *Tuple {
 	tuple := new(Tuple)
 	tuple.kind = t
-	tuple.values = make([]interface{}, len(t.SubTypes))
+	tuple.values = make([]interface{}, len(t.subtypes))
 	if len(args) > 0 {
 		copy(tuple.values, args)
 	}
@@ -328,7 +445,7 @@ func (tuple Tuple) Values() []interface{} {
 }
 
 func (tuple Tuple) Len() int {
-	return len(tuple.kind.SubTypes)
+	return len(tuple.kind.subtypes)
 }
 
 // Sets the value at the given index and returns the same
@@ -338,7 +455,7 @@ func (tuple Tuple) Len() int {
 func (tuple *Tuple) Set(index int, value interface{}) *Tuple {
 	if index < 0 || index >= tuple.Len() {
 		panic(fmt.Sprintf("Cannot set value at index %d in a tuple %s which has only %d values",
-			index, tuple.kind.Name(), tuple.Len()))
+			index, tuple.kind.String(), tuple.Len()))
 	}
 	tuple.values[index] = value
 
@@ -348,7 +465,7 @@ func (tuple *Tuple) Set(index int, value interface{}) *Tuple {
 func (tuple *Tuple) SetValues(values ...interface{}) error {
 	if tuple.Len() < len(values) {
 		return fmt.Errorf("Cannot set %d values in a tuple %s which has only %d values",
-			len(values), tuple.kind.Name(), tuple.Len())
+			len(values), tuple.kind.String(), tuple.Len())
 	}
 	copy(tuple.values, values)
 
@@ -357,7 +474,7 @@ func (tuple *Tuple) SetValues(values ...interface{}) error {
 
 func (tuple Tuple) Get(index int) interface{} {
 	if index < 0 || index >= tuple.Len() {
-		panic(fmt.Sprintf("Tuple %s has only %d values", tuple.kind.Name(), tuple.Len()))
+		panic(fmt.Sprintf("Tuple %s has only %d values", tuple.kind.String(), tuple.Len()))
 	}
 
 	return tuple.values[index]
@@ -365,8 +482,8 @@ func (tuple Tuple) Get(index int) interface{} {
 
 func (tuple Tuple) String() string {
 	names := make([]string, tuple.Len())
-	for i, st := range tuple.kind.SubTypes {
-		names[i] = "%v " + st.Name()
+	for i, st := range tuple.kind.subtypes {
+		names[i] = "%v " + st.String()
 	}
 	format := "tuple<" + strings.Join(names, ", ") + ">"
 	return fmt.Sprintf(format, tuple.values...)

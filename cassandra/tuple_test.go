@@ -15,13 +15,13 @@ func TestNewTupleFailures(t *testing.T) {
 		}
 	}()
 
-	tuple := cassandra.NewTuple(cassandra.CASS_TUPLE.Subtype(cassandra.CASS_INT, cassandra.CASS_INT))
+	tuple := cassandra.NewTuple(cassandra.CTuple.Specialize(cassandra.CInt, cassandra.CInt))
 	tuple.Set(2, 42)
 	tuple.Get(2)
 }
 
 func TestEmptyTupleGet(t *testing.T) {
-	tuple := cassandra.NewTuple(cassandra.CASS_TUPLE.Subtype(cassandra.CASS_INT, cassandra.CASS_INT))
+	tuple := cassandra.NewTuple(cassandra.CTuple.Specialize(cassandra.CInt, cassandra.CInt))
 	val := tuple.Get(0)
 	if val != nil {
 		t.Errorf("unpopulated tuple must return nil")
@@ -29,13 +29,13 @@ func TestEmptyTupleGet(t *testing.T) {
 }
 
 func TestNewTuple(t *testing.T) {
-	tuple := cassandra.NewTuple(cassandra.CASS_TUPLE.Subtype(cassandra.CASS_INT, cassandra.CASS_INT),
+	tuple := cassandra.NewTuple(cassandra.CTuple.Specialize(cassandra.CInt, cassandra.CInt),
 		10, 20)
 	if _, ok := tuple.Get(1).(bool); ok {
-		t.Errorf("cannot retrieve value %d as bool from %s", 1, tuple.Kind().Name())
+		t.Errorf("cannot retrieve value %d as bool from %s", 1, tuple.Kind().String())
 	}
 	if val, ok := tuple.Get(1).(int); !ok {
-		t.Errorf("retrieving value %d from %s should work", 1, tuple.Kind().Name())
+		t.Errorf("retrieving value %d from %s should work", 1, tuple.Kind().String())
 	} else if 20 != val {
 		t.Errorf("%d != %d (expected)", val, 20)
 	}
@@ -83,7 +83,7 @@ func testSelectTuple(t *testing.T, s *cassandra.Session, id int) {
 
 func testInsertTupleUsingStatement(t *testing.T, s *cassandra.Session) {
 	t.Skip()
-	tuple := cassandra.NewTuple(cassandra.CASS_TUPLE.Subtype(cassandra.CASS_BOOLEAN, cassandra.CASS_INT, cassandra.CASS_TEXT), false, 42, "statement")
+	tuple := cassandra.NewTuple(cassandra.CTuple.Specialize(cassandra.CBoolean, cassandra.CInt, cassandra.CText), false, 42, "statement")
 	if _, err := s.Exec("INSERT INTO golang_driver.tuples (id, tpl) VALUES (?, ?)",
 		100, tuple); err != nil {
 		t.Error(err)
@@ -101,7 +101,7 @@ func testInsertTupleUsingPreparedStatement(t *testing.T, s *cassandra.Session) {
 		return
 	}
 
-	tuple := cassandra.NewTuple(cassandra.CASS_TUPLE.Subtype(cassandra.CASS_BOOLEAN, cassandra.CASS_INT, cassandra.CASS_TEXT), false, 42, "statement")
+	tuple := cassandra.NewTuple(cassandra.CTuple.Specialize(cassandra.CBoolean, cassandra.CInt, cassandra.CText), false, 42, "statement")
 	if _, err = pstmt.Exec(1001, tuple); err != nil {
 		t.Error(err)
 		return

@@ -6,10 +6,11 @@ import (
 )
 
 func TestCassTypeName(t *testing.T) {
-	tupleType := cassandra.CASS_TUPLE.Subtype(cassandra.CASS_INT,
-		cassandra.CASS_TEXT,
-		cassandra.CASS_LIST.Subtype(cassandra.CASS_TIMEUUID))
-	if "tuple<int, text, list<timeuuid>>" != tupleType.Name() {
-		t.Errorf("%s not expected", tupleType.Name())
+	tupleType := cassandra.CTuple.Specialize(cassandra.CInt,
+		cassandra.CText,
+		cassandra.CList.Specialize(cassandra.CTimeuuid))
+	var expected = "tuple<int, text, list<timeuuid>>"
+	if expected != tupleType.String() {
+		t.Errorf("%s != %s", tupleType.String(), expected)
 	}
 }

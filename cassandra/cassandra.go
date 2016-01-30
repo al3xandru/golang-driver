@@ -257,7 +257,7 @@ func (rows *Rows) ColumnName(index int) string {
 }
 
 func (rows *Rows) ColumnType(index int) CassType {
-	return CassTypeFromDataType(C.cass_result_column_data_type(rows.cptr, C.size_t(index)))
+	return cassTypeFromCassDataType(C.cass_result_column_data_type(rows.cptr, C.size_t(index)))
 }
 
 func (rows *Rows) Next() bool {
@@ -277,7 +277,7 @@ func (rows *Rows) Scan(args ...interface{}) error {
 	for i, v := range args {
 		pos := C.size_t(i)
 		value := C.cass_row_get_column(row, pos)
-		ctype := CassTypeFromDataType(
+		ctype := cassTypeFromCassDataType(
 			C.cass_result_column_data_type(rows.cptr, pos))
 
 		if _, err := read(value, ctype, v); err != nil {

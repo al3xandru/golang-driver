@@ -82,9 +82,9 @@ func (stmt *Statement) bind(args ...interface{}) error {
 
 func (stmt *Statement) dataType(index int) CassType {
 	if stmt.pstmt == nil {
-		return CASS_UNKNOWN
+		return CUnknown
 	}
-	return CassTypeFromDataType(
+	return cassTypeFromCassDataType(
 		cassDataType(C.cass_prepared_parameter_data_type(stmt.pstmt.cptr,
 			C.size_t(index))))
 }

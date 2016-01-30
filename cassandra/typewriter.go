@@ -28,7 +28,7 @@ func write(stmt *Statement, value interface{}, index int, dataType CassType) err
 		return err
 	}
 	ct := tv.Kind()
-	fmt.Printf("->%s.BindTo(%d)\n", ct.Name(), index)
+	fmt.Printf("->%s.BindTo(%d)\n", ct.String(), index)
 	return tv.BindTo(stmt, index)
 }
 
@@ -52,10 +52,9 @@ type typedValue interface {
 }
 
 func newCassTypedVal(value interface{}, dataType CassType) (typedValue, error) {
-	fmt.Printf("write(dataType=%s)\n", dataType.Name())
-	cassValueType := dataType.PrimaryType
+	fmt.Printf("write(dataType=%s)\n", dataType.String())
 
-	switch cassValueType {
+	switch dataType.primary {
 	case CASS_VALUE_TYPE_ASCII, CASS_VALUE_TYPE_TEXT, CASS_VALUE_TYPE_VARCHAR:
 		fmt.Printf("->toText()\n")
 		return toText(value, dataType)
@@ -105,83 +104,83 @@ func newCassTypedVal(value interface{}, dataType CassType) (typedValue, error) {
 
 	switch value := value.(type) {
 	case bool:
-		return toBool(value, CASS_BOOLEAN)
+		return toBool(value, CBoolean)
 	case int64:
-		return toBigint(value, CASS_BIGINT)
+		return toBigint(value, CBigInt)
 	case int32:
-		return toInt(value, CASS_INT)
+		return toInt(value, CInt)
 	case int16:
-		return toSmallInt(value, CASS_SMALLINT)
+		return toSmallInt(value, CSmallInt)
 	case int8:
-		return toTinyInt(value, CASS_TINYINIT)
+		return toTinyInt(value, CTinyInt)
 	case int:
 		// must determine if it's 64 or 32
 		if value < math.MinInt32 || value > math.MaxInt32 {
-			return toBigint(value, CASS_BIGINT)
+			return toBigint(value, CBigInt)
 		} else {
-			return toInt(value, CASS_INT)
+			return toInt(value, CInt)
 		}
 	case *big.Int:
-		return toVarint(value, CASS_VARINT)
+		return toVarint(value, CVarint)
 	case float32:
-		return toFloat(value, CASS_FLOAT)
+		return toFloat(value, CFloat)
 	case float64:
-		return toDouble(value, CASS_DOUBLE)
+		return toDouble(value, CDouble)
 	case *Decimal:
-		return toDecimal(value, CASS_DECIMAL)
+		return toDecimal(value, CDecimal)
 	case string:
 		fmt.Printf("newCassTypedVal(%v %T)\n", value, value)
-		return toText(value, CASS_TEXT)
+		return toText(value, CText)
 	case UUID:
 		switch value.Version() {
 		case 1:
-			return toUUID(value, CASS_TIMEUUID)
+			return toUUID(value, CTimeuuid)
 		case 4:
-			return toUUID(value, CASS_UUID)
+			return toUUID(value, CUuid)
 		}
 	case Date:
-		return toDate(value, CASS_DATE)
+		return toDate(value, CDate)
 	case Time:
-		return toTime(value, CASS_TIME)
+		return toTime(value, CTime)
 	case Timestamp:
-		return toTimestamp(value, CASS_TIMESTAMP)
+		return toTimestamp(value, CTimestamp)
 	case net.IP:
-		return toInet(value, CASS_INET)
+		return toInet(value, CInet)
 	case []byte:
-		return toBlob(value, CASS_BLOB)
+		return toBlob(value, CBlob)
 	case setmarker:
-		return toSet(value.value, CASS_SET)
+		return toSet(value.value, CSet)
 	}
 	// last attempt
 	rVal := reflect.ValueOf(value)
 	switch rVal.Type().Kind() {
 	case reflect.Bool:
-		return toBool(value, CASS_BOOLEAN)
+		return toBool(value, CBoolean)
 	case reflect.Int64:
-		return toBigint(value, CASS_BIGINT)
+		return toBigint(value, CBigInt)
 	case reflect.Int32:
-		return toInt(value, CASS_INT)
+		return toInt(value, CInt)
 	case reflect.Int16:
-		return toSmallInt(value, CASS_SMALLINT)
+		return toSmallInt(value, CSmallInt)
 	case reflect.Int8:
-		return toTinyInt(value, CASS_TINYINIT)
+		return toTinyInt(value, CTinyInt)
 	case reflect.Int:
 		// if maxInt > 2147483647 {
 		if rVal.Int() < math.MinInt32 || rVal.Int() > math.MaxInt32 {
-			return toBigint(rVal.Int(), CASS_BIGINT)
+			return toBigint(rVal.Int(), CBigInt)
 		} else {
-			return toInt(rVal.Int(), CASS_INT)
+			return toInt(rVal.Int(), CInt)
 		}
 	case reflect.Float32:
-		return toFloat(value, CASS_FLOAT)
+		return toFloat(value, CFloat)
 	case reflect.Float64:
-		return toDouble(value, CASS_DOUBLE)
+		return toDouble(value, CDouble)
 	case reflect.String:
-		return toText(value, CASS_TEXT)
+		return toText(value, CText)
 	case reflect.Map:
-		return toMap(value, CASS_MAP)
+		return toMap(value, CMap)
 	case reflect.Slice, reflect.Array:
-		return toList(value, CASS_LIST)
+		return toList(value, CList)
 	}
 
 	return nil, fmt.Errorf("unknown type %T", value)
@@ -207,7 +206,7 @@ func toBool(value interface{}, cassType CassType) (*primitiveTypedVal, error) {
 		}
 	}
 
-	return nil, fmt.Errorf("cannot convert %T into %s", value, cassType.Name())
+	return nil, fmt.Errorf("cannot convert %T into %s", value, cassType.String())
 }
 
 func toBigint(value interface{}, cassType CassType) (*primitiveTypedVal, error) {
@@ -222,7 +221,7 @@ func toBigint(value interface{}, cassType CassType) (*primitiveTypedVal, error) 
 		return &primitiveTypedVal{rVal.Int(), cassType}, nil
 	}
 
-	return nil, fmt.Errorf("cannot convert %T into %s", value, cassType.Name())
+	return nil, fmt.Errorf("cannot convert %T into %s", value, cassType.String())
 }
 
 func toInt(value interface{}, cassType CassType) (*primitiveTypedVal, error) {
@@ -237,7 +236,7 @@ func toInt(value interface{}, cassType CassType) (*primitiveTypedVal, error) {
 		return &primitiveTypedVal{rVal.Int(), cassType}, nil
 	}
 
-	return nil, fmt.Errorf("cannot convert %T into %s", value, cassType.Name())
+	return nil, fmt.Errorf("cannot convert %T into %s", value, cassType.String())
 }
 
 func toSmallInt(value interface{}, cassType CassType) (*primitiveTypedVal, error) {
@@ -252,7 +251,7 @@ func toSmallInt(value interface{}, cassType CassType) (*primitiveTypedVal, error
 		return &primitiveTypedVal{rVal.Int(), cassType}, nil
 	}
 
-	return nil, fmt.Errorf("cannot convert %T into %s", value, cassType.Name())
+	return nil, fmt.Errorf("cannot convert %T into %s", value, cassType.String())
 }
 
 func toTinyInt(value interface{}, cassType CassType) (*primitiveTypedVal, error) {
@@ -267,7 +266,7 @@ func toTinyInt(value interface{}, cassType CassType) (*primitiveTypedVal, error)
 		return &primitiveTypedVal{rVal.Int(), cassType}, nil
 	}
 
-	return nil, fmt.Errorf("cannot convert %T into %s", value, cassType.Name())
+	return nil, fmt.Errorf("cannot convert %T into %s", value, cassType.String())
 }
 
 func toVarint(value interface{}, cassType CassType) (*primitiveTypedVal, error) {
@@ -276,7 +275,7 @@ func toVarint(value interface{}, cassType CassType) (*primitiveTypedVal, error) 
 		buf := export2Complement(value)
 		return &primitiveTypedVal{buf, cassType}, nil
 	}
-	return nil, fmt.Errorf("cannot convert %T into %s", value, cassType.Name())
+	return nil, fmt.Errorf("cannot convert %T into %s", value, cassType.String())
 }
 
 func toFloat(value interface{}, cassType CassType) (*primitiveTypedVal, error) {
@@ -291,7 +290,7 @@ func toFloat(value interface{}, cassType CassType) (*primitiveTypedVal, error) {
 		return &primitiveTypedVal{rVal.Float(), cassType}, nil
 	}
 
-	return nil, fmt.Errorf("cannot convert %T into %s", value, cassType.Name())
+	return nil, fmt.Errorf("cannot convert %T into %s", value, cassType.String())
 }
 
 func toDouble(value interface{}, cassType CassType) (*primitiveTypedVal, error) {
@@ -306,7 +305,7 @@ func toDouble(value interface{}, cassType CassType) (*primitiveTypedVal, error) 
 		return &primitiveTypedVal{rVal.Float(), cassType}, nil
 	}
 
-	return nil, fmt.Errorf("cannot convert %T into %s", value, cassType.Name())
+	return nil, fmt.Errorf("cannot convert %T into %s", value, cassType.String())
 }
 
 func toDecimal(value interface{}, cassType CassType) (*primitiveTypedVal, error) {
@@ -314,7 +313,7 @@ func toDecimal(value interface{}, cassType CassType) (*primitiveTypedVal, error)
 	case *Decimal:
 		return &primitiveTypedVal{value, cassType}, nil
 	}
-	return nil, fmt.Errorf("cannot convert %T into %s", value, cassType.Name())
+	return nil, fmt.Errorf("cannot convert %T into %s", value, cassType.String())
 }
 
 // Could allow string too
@@ -322,7 +321,7 @@ func toUUID(value interface{}, cassType CassType) (*primitiveTypedVal, error) {
 	if value, ok := value.(UUID); ok {
 		return &primitiveTypedVal{value, cassType}, nil
 	}
-	return nil, fmt.Errorf("cannot convert %T into %s", value, cassType.Name())
+	return nil, fmt.Errorf("cannot convert %T into %s", value, cassType.String())
 }
 
 func toText(value interface{}, cassType CassType) (*primitiveTypedVal, error) {
@@ -337,7 +336,7 @@ func toText(value interface{}, cassType CassType) (*primitiveTypedVal, error) {
 		return &primitiveTypedVal{rVal.String(), cassType}, nil
 	}
 
-	return nil, fmt.Errorf("cannot convert %T into %s", value, cassType.Name())
+	return nil, fmt.Errorf("cannot convert %T into %s", value, cassType.String())
 }
 
 func toDate(value interface{}, cassType CassType) (*primitiveTypedVal, error) {
@@ -350,7 +349,7 @@ func toDate(value interface{}, cassType CassType) (*primitiveTypedVal, error) {
 		date, err := ParseDate(value)
 		if err != nil {
 			return nil, fmt.Errorf("cannot convert %T (%s) into %s",
-				value, value, cassType.Name())
+				value, value, cassType.String())
 		}
 		return &primitiveTypedVal{date.days, cassType}, nil
 	}
@@ -361,7 +360,7 @@ func toDate(value interface{}, cassType CassType) (*primitiveTypedVal, error) {
 		return &primitiveTypedVal{rVal.Uint(), cassType}, nil
 	}
 
-	return nil, fmt.Errorf("cannot convert %T into %s", value, cassType.Name())
+	return nil, fmt.Errorf("cannot convert %T into %s", value, cassType.String())
 }
 
 func toTime(value interface{}, cassType CassType) (*primitiveTypedVal, error) {
@@ -378,7 +377,7 @@ func toTime(value interface{}, cassType CassType) (*primitiveTypedVal, error) {
 		return &primitiveTypedVal{rVal.Int(), cassType}, nil
 	}
 
-	return nil, fmt.Errorf("cannot convert %T into %s", value, cassType.Name())
+	return nil, fmt.Errorf("cannot convert %T into %s", value, cassType.String())
 }
 
 func toTimestamp(value interface{}, cassType CassType) (*primitiveTypedVal, error) {
@@ -395,7 +394,7 @@ func toTimestamp(value interface{}, cassType CassType) (*primitiveTypedVal, erro
 		return &primitiveTypedVal{rVal.Int(), cassType}, nil
 	}
 
-	return nil, fmt.Errorf("cannot convert %T into %s", value, cassType.Name())
+	return nil, fmt.Errorf("cannot convert %T into %s", value, cassType.String())
 }
 
 func toInet(value interface{}, cassType CassType) (*primitiveTypedVal, error) {
@@ -404,7 +403,7 @@ func toInet(value interface{}, cassType CassType) (*primitiveTypedVal, error) {
 		return &primitiveTypedVal{[]byte(value), cassType}, nil
 	}
 
-	return nil, fmt.Errorf("cannot convert %T into %s", value, cassType.Name())
+	return nil, fmt.Errorf("cannot convert %T into %s", value, cassType.String())
 }
 
 func toBlob(value interface{}, cassType CassType) (*primitiveTypedVal, error) {
@@ -421,7 +420,7 @@ func toBlob(value interface{}, cassType CassType) (*primitiveTypedVal, error) {
 		}
 	}
 
-	return nil, fmt.Errorf("cannot convert %T into %s", value, cassType.Name())
+	return nil, fmt.Errorf("cannot convert %T into %s", value, cassType.String())
 }
 
 func toList(value interface{}, dataType CassType) (*collectionTypedVal, error) {
@@ -431,9 +430,9 @@ func toList(value interface{}, dataType CassType) (*collectionTypedVal, error) {
 		col := C.cass_collection_new(C.CASS_COLLECTION_TYPE_LIST, C.size_t(rVal.Len()))
 		ctv := &collectionTypedVal{col, dataType, CASS_VALUE_TYPE_LIST}
 
-		elemDataType := CASS_UNKNOWN
-		if len(dataType.SubTypes) > 0 {
-			elemDataType = dataType.SubTypes[0]
+		elemDataType := CUnknown
+		if len(dataType.subtypes) > 0 {
+			elemDataType = dataType.subtypes[0]
 		}
 
 		idx := 0
@@ -442,9 +441,9 @@ func toList(value interface{}, dataType CassType) (*collectionTypedVal, error) {
 			if err != nil {
 				return nil, err
 			}
-			if elemDataType.Eq(CASS_UNKNOWN) {
+			if elemDataType.equals(CUnknown) {
 				elemDataType = tv.Kind()
-				ctv.kind = ctv.kind.Subtype(elemDataType)
+				ctv.kind = ctv.kind.Specialize(elemDataType)
 			}
 			if err = tv.BindTo(ctv, -1); err != nil {
 				return nil, err
@@ -454,23 +453,23 @@ func toList(value interface{}, dataType CassType) (*collectionTypedVal, error) {
 		return ctv, nil
 	}
 
-	return nil, fmt.Errorf("cannot convert %T into %s", value, dataType.Name())
+	return nil, fmt.Errorf("cannot convert %T into %s", value, dataType.String())
 }
 
 func toMap(value interface{}, dataType CassType) (*collectionTypedVal, error) {
 	rVal := reflect.ValueOf(value)
 	if rVal.Type().Kind() != reflect.Map {
-		return nil, fmt.Errorf("cannot convert %T into %s", value, dataType.Name())
+		return nil, fmt.Errorf("cannot convert %T into %s", value, dataType.String())
 	}
 	col := C.cass_collection_new(C.CASS_COLLECTION_TYPE_MAP, C.size_t(rVal.Len()))
 	ctv := &collectionTypedVal{col, dataType, CASS_VALUE_TYPE_MAP}
 
-	var keyDataType, valDataType CassType = CASS_UNKNOWN, CASS_UNKNOWN
-	if len(dataType.SubTypes) > 0 {
+	var keyDataType, valDataType CassType = CUnknown, CUnknown
+	if len(dataType.subtypes) > 0 {
 		// keyDataType = cassDataType(C.cass_data_type_sub_data_type(dataType, 0))
 		// valDataType = cassDataType(C.cass_data_type_sub_data_type(dataType, 1))
-		keyDataType = dataType.SubTypes[0]
-		valDataType = dataType.SubTypes[1]
+		keyDataType = dataType.subtypes[0]
+		valDataType = dataType.subtypes[1]
 	}
 
 	keys := rVal.MapKeys()
@@ -479,7 +478,7 @@ func toMap(value interface{}, dataType CassType) (*collectionTypedVal, error) {
 		if err != nil {
 			return nil, err
 		}
-		if keyDataType.Eq(CASS_UNKNOWN) {
+		if keyDataType.equals(CUnknown) {
 			keyDataType = tv.Kind()
 		}
 		if err = tv.BindTo(ctv, -1); err != nil {
@@ -489,9 +488,9 @@ func toMap(value interface{}, dataType CassType) (*collectionTypedVal, error) {
 		if err != nil {
 			return nil, err
 		}
-		if valDataType.Eq(CASS_UNKNOWN) {
+		if valDataType.equals(CUnknown) {
 			valDataType = tv.Kind()
-			ctv.kind = ctv.kind.Subtype(keyDataType, valDataType)
+			ctv.kind = ctv.kind.Specialize(keyDataType, valDataType)
 		}
 		if err = tv.BindTo(ctv, -1); err != nil {
 			return nil, err
@@ -517,9 +516,9 @@ func toSet(value interface{}, dataType CassType) (*collectionTypedVal, error) {
 		// if dataType != nil {
 		// 	elemDataType = cassDataType(C.cass_data_type_sub_data_type(dataType, 0))
 		// }
-		elemDataType := CASS_UNKNOWN
-		if len(dataType.SubTypes) > 0 {
-			elemDataType = dataType.SubTypes[0]
+		elemDataType := CUnknown
+		if len(dataType.subtypes) > 0 {
+			elemDataType = dataType.subtypes[0]
 		}
 
 		idx := 0
@@ -528,9 +527,9 @@ func toSet(value interface{}, dataType CassType) (*collectionTypedVal, error) {
 			if err != nil {
 				return nil, err
 			}
-			if elemDataType.Eq(CASS_UNKNOWN) {
+			if elemDataType.equals(CUnknown) {
 				elemDataType = tv.Kind()
-				ctv.kind = ctv.kind.Subtype(elemDataType)
+				ctv.kind = ctv.kind.Specialize(elemDataType)
 			}
 			if err = tv.BindTo(ctv, -1); err != nil {
 				return nil, err
@@ -547,9 +546,9 @@ func toSet(value interface{}, dataType CassType) (*collectionTypedVal, error) {
 		// if dataType != nil {
 		// 	elemDataType = cassDataType(C.cass_data_type_sub_data_type(dataType, 0))
 		// }
-		elemDataType := CASS_UNKNOWN
-		if len(dataType.SubTypes) > 0 {
-			elemDataType = dataType.SubTypes[0]
+		elemDataType := CUnknown
+		if len(dataType.subtypes) > 0 {
+			elemDataType = dataType.subtypes[0]
 		}
 
 		keys := rVal.MapKeys()
@@ -558,9 +557,9 @@ func toSet(value interface{}, dataType CassType) (*collectionTypedVal, error) {
 			if err != nil {
 				return nil, err
 			}
-			if elemDataType.Eq(CASS_UNKNOWN) {
+			if elemDataType.equals(CUnknown) {
 				elemDataType = tv.Kind()
-				ctv.kind = ctv.kind.Subtype(elemDataType)
+				ctv.kind = ctv.kind.Specialize(elemDataType)
 			}
 			if err = tv.BindTo(ctv, -1); err != nil {
 				return nil, err
@@ -570,7 +569,7 @@ func toSet(value interface{}, dataType CassType) (*collectionTypedVal, error) {
 		return ctv, nil
 	}
 
-	return nil, fmt.Errorf("cannot convert %T into %s", value, dataType.Name())
+	return nil, fmt.Errorf("cannot convert %T into %s", value, dataType.String())
 }
 
 // implements internal `typedValue` interface
@@ -596,7 +595,7 @@ func (ptv primitiveTypedVal) BindTo(dst interface{}, index int) error {
 	var retc C.CassError
 	pos := C.size_t(index)
 
-	switch ptv.kind.PrimaryType {
+	switch ptv.kind.primary {
 	case CASS_VALUE_TYPE_ASCII, CASS_VALUE_TYPE_TEXT, CASS_VALUE_TYPE_VARCHAR:
 		cstr := C.CString(ptv.val.(string))
 		defer C.free(unsafe.Pointer(cstr))
