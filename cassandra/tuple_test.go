@@ -32,10 +32,10 @@ func TestNewTuple(t *testing.T) {
 	tuple := cassandra.NewTuple(cassandra.CASS_TUPLE.Subtype(cassandra.CASS_INT, cassandra.CASS_INT),
 		10, 20)
 	if _, ok := tuple.Get(1).(bool); ok {
-		t.Errorf("cannot retrieve value %d as bool from %s", 1, tuple.Kind.Name())
+		t.Errorf("cannot retrieve value %d as bool from %s", 1, tuple.Kind().Name())
 	}
 	if val, ok := tuple.Get(1).(int); !ok {
-		t.Errorf("retrieving value %d from %s should work", 1, tuple.Kind.Name())
+		t.Errorf("retrieving value %d from %s should work", 1, tuple.Kind().Name())
 	} else if 20 != val {
 		t.Errorf("%d != %d (expected)", val, 20)
 	}
@@ -71,8 +71,14 @@ func testSelectTuple(t *testing.T, s *cassandra.Session, id int) {
 		t.Error(err)
 		return
 	}
-	t.Logf("Tuple %s: %v", tuple.Kind.Name(), tuple.Values)
-	t.Logf(tuple.String())
+	var expected = "(true, 1, abc)"
+	if tuple.NativeString() != expected {
+		t.Errorf("%s != %s", tuple.NativeString(), expected)
+	}
+	expected = "tuple<true boolean, 1 int, abc varchar>"
+	if tuple.String() != expected {
+		t.Errorf("string %s != %s", tuple.String(), expected)
+	}
 }
 
 func testInsertTupleUsingStatement(t *testing.T, s *cassandra.Session) {

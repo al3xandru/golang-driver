@@ -122,7 +122,7 @@ func (ct CassType) Subtype(subTypes ...CassType) CassType {
 	return CassType{PrimaryType: ct.PrimaryType, SubTypes: subTypes}
 }
 
-func (ct *CassType) Name() string {
+func (ct CassType) Name() string {
 	switch ct.PrimaryType {
 	case CASS_VALUE_TYPE_LIST:
 		if len(ct.SubTypes) > 0 {

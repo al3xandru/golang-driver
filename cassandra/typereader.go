@@ -835,22 +835,20 @@ func readTuple(value *C.CassValue, cassType CassType, dst interface{}) (bool, er
 		defer C.cass_iterator_free(colIter)
 
 		sz := int(C.cass_value_item_count(value))
-		dst.length = sz
-		dst.Values = make([]interface{}, sz)
+		dst.values = make([]interface{}, sz)
 		subtypes := make([]CassType, sz)
 
 		b := C.cass_iterator_next(colIter)
 		for i := 0; b != 0; i++ {
 			val := C.cass_iterator_get_value(colIter)
-			valType := CassTypeFromDataType(C.cass_value_data_type(val))
-			subtypes[i] = valType
+			subtypes[i] = CassTypeFromDataType(C.cass_value_data_type(val))
 
-			if _, err := read(val, valType, &dst.Values[i]); err != nil {
+			if _, err := read(val, subtypes[i], &dst.values[i]); err != nil {
 				return true, err
 			}
 			b = C.cass_iterator_next(colIter)
 		}
-		dst.Kind = CASS_TUPLE.Subtype(subtypes...)
+		dst.kind = CASS_TUPLE.Subtype(subtypes...)
 
 		return true, nil
 	}

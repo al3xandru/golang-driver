@@ -292,51 +292,90 @@ func NewDecimal(val int64, scale int32) *Decimal {
 	return &Decimal{big.NewInt(val), scale}
 }
 
-func (d *Decimal) String() string {
+func (d Decimal) String() string {
 	s := d.Value.String()
 	pos := len(s) - int(d.Scale)
 	return fmt.Sprintf("%s.%s", s[0:pos], s[pos:])
 }
 
+func (d Decimal) NativeString() string {
+	return d.String()
+}
+
+// A Tuple type corresponding to the Cassandra tuple data type.
 type Tuple struct {
-	Kind   CassType
-	Values []interface{}
-	length int
+	kind   CassType
+	values []interface{}
 }
 
 func NewTuple(t CassType, args ...interface{}) *Tuple {
 	tuple := new(Tuple)
-	tuple.Kind = t
-	tuple.length = len(t.SubTypes)
-	tuple.Values = make([]interface{}, tuple.length)
+	tuple.kind = t
+	tuple.values = make([]interface{}, len(t.SubTypes))
 	if len(args) > 0 {
-		copy(tuple.Values, args)
+		copy(tuple.values, args)
 	}
 
 	return tuple
 }
 
+func (tuple Tuple) Kind() CassType {
+	return tuple.kind
+}
+
+func (tuple Tuple) Values() []interface{} {
+	return tuple.values
+}
+
+func (tuple Tuple) Len() int {
+	return len(tuple.kind.SubTypes)
+}
+
+// Sets the value at the given index and returns the same
+// pointer to the Tuple so multiple Set operations can be chained.
+// This method panics if the provided index falls outside the length
+// of the tuple
 func (tuple *Tuple) Set(index int, value interface{}) *Tuple {
-	if index < 0 || index >= tuple.length {
-		panic(fmt.Sprintf("Tuple %s has only %d values", tuple.Kind.Name(), tuple.length))
+	if index < 0 || index >= tuple.Len() {
+		panic(fmt.Sprintf("Cannot set value at index %d in a tuple %s which has only %d values",
+			index, tuple.kind.Name(), tuple.Len()))
 	}
-	tuple.Values[index] = value
+	tuple.values[index] = value
 
 	return tuple
 }
 
-func (tuple *Tuple) Get(index int) interface{} {
-	if index < 0 || index >= tuple.length {
-		panic(fmt.Sprintf("Tuple %s has only %d values", tuple.Kind.Name(), tuple.length))
+func (tuple *Tuple) SetValues(values ...interface{}) error {
+	if tuple.Len() < len(values) {
+		return fmt.Errorf("Cannot set %d values in a tuple %s which has only %d values",
+			len(values), tuple.kind.Name(), tuple.Len())
 	}
+	copy(tuple.values, values)
 
-	return tuple.Values[index]
+	return nil
 }
 
-func (tuple *Tuple) String() string {
-	if tuple.length == 0 {
+func (tuple Tuple) Get(index int) interface{} {
+	if index < 0 || index >= tuple.Len() {
+		panic(fmt.Sprintf("Tuple %s has only %d values", tuple.kind.Name(), tuple.Len()))
+	}
+
+	return tuple.values[index]
+}
+
+func (tuple Tuple) String() string {
+	names := make([]string, tuple.Len())
+	for i, st := range tuple.kind.SubTypes {
+		names[i] = "%v " + st.Name()
+	}
+	format := "tuple<" + strings.Join(names, ", ") + ">"
+	return fmt.Sprintf(format, tuple.values...)
+}
+
+func (tuple Tuple) NativeString() string {
+	if tuple.Len() == 0 {
 		return "()"
 	}
-	format := "(" + strings.Repeat("%v, ", tuple.length-1) + "%v)"
-	return fmt.Sprintf(format, tuple.Values...)
+	format := "(" + strings.Repeat("%v, ", tuple.Len()-1) + "%v)"
+	return fmt.Sprintf(format, tuple.values...)
 }
