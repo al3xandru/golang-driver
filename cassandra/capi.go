@@ -31,6 +31,7 @@ func cassTypeFromCassDataType(cdt cassDataType) CassType {
 		return CUnknown
 	}
 	cvt := valueType(cdt)
+	// fmt.Printf("ValueType: 0x%04X\n", cvt)
 	switch cvt {
 	case CASS_VALUE_TYPE_LIST, CASS_VALUE_TYPE_SET:
 		ctype := new(CassType)
@@ -110,7 +111,7 @@ func cassTypeFromCassDataType(cdt cassDataType) CassType {
 	}
 }
 
-func (ct CassType) equals(other CassType) bool {
+func (ct CassType) Equals(other CassType) bool {
 	if ct.primary != other.primary {
 		return false
 	}
@@ -118,7 +119,7 @@ func (ct CassType) equals(other CassType) bool {
 		return false
 	}
 	for idx, _ := range ct.subtypes {
-		if !ct.subtypes[idx].equals(other.subtypes[idx]) {
+		if !ct.subtypes[idx].Equals(other.subtypes[idx]) {
 			return false
 		}
 	}

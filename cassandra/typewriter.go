@@ -22,13 +22,15 @@ func write(stmt *Statement, value interface{}, index int, dataType CassType) err
 			return newError(retc)
 		}
 	}
-	fmt.Printf("write(%v %T)\n", value, value)
+	// fmt.Printf("write(%v %T)\n", value, value)
 	tv, err := newCassTypedVal(value, dataType)
 	if err != nil {
 		return err
 	}
-	ct := tv.Kind()
-	fmt.Printf("->%s.BindTo(%d)\n", ct.String(), index)
+	defer tv.Free()
+	// DEBUG
+	// ct := tv.Kind()
+	// fmt.Printf("->%s.BindTo(%d)\n", ct.String(), index)
 	return tv.BindTo(stmt, index)
 }
 
@@ -46,17 +48,22 @@ type collectionTypedVal struct {
 	cassType C.CassValueType
 }
 
+type tupleTypedVal struct {
+	cptr *C.struct_CassTuple_
+	kind CassType
+}
+
 type typedValue interface {
 	BindTo(dst interface{}, index int) error
 	Kind() CassType
+	Free()
 }
 
 func newCassTypedVal(value interface{}, dataType CassType) (typedValue, error) {
-	fmt.Printf("write(dataType=%s)\n", dataType.String())
+	// fmt.Printf("write(dataType=%s)\n", dataType.String())
 
 	switch dataType.primary {
 	case CASS_VALUE_TYPE_ASCII, CASS_VALUE_TYPE_TEXT, CASS_VALUE_TYPE_VARCHAR:
-		fmt.Printf("->toText()\n")
 		return toText(value, dataType)
 	case CASS_VALUE_TYPE_BOOLEAN:
 		return toBool(value, dataType)
@@ -96,8 +103,8 @@ func newCassTypedVal(value interface{}, dataType CassType) (typedValue, error) {
 		return toSet(value, dataType)
 	case CASS_VALUE_TYPE_MAP:
 		return toMap(value, dataType)
-		// case CASS_VALUE_TYPE_TUPLE:
-		// 	return readTuple(value, cassType, dst)
+	case CASS_VALUE_TYPE_TUPLE:
+		return toTuple(value, dataType)
 		// case CASS_VALUE_TYPE_UDT:
 		// 	return readUDT(value, cassType, dst)
 	}
@@ -129,7 +136,6 @@ func newCassTypedVal(value interface{}, dataType CassType) (typedValue, error) {
 	case *Decimal:
 		return toDecimal(value, CDecimal)
 	case string:
-		fmt.Printf("newCassTypedVal(%v %T)\n", value, value)
 		return toText(value, CText)
 	case UUID:
 		switch value.Version() {
@@ -150,6 +156,8 @@ func newCassTypedVal(value interface{}, dataType CassType) (typedValue, error) {
 		return toBlob(value, CBlob)
 	case setmarker:
 		return toSet(value.value, CSet)
+	case Tuple, *Tuple:
+		return toTuple(value, CTuple)
 	}
 	// last attempt
 	rVal := reflect.ValueOf(value)
@@ -275,6 +283,7 @@ func toVarint(value interface{}, cassType CassType) (*primitiveTypedVal, error) 
 		buf := export2Complement(value)
 		return &primitiveTypedVal{buf, cassType}, nil
 	}
+
 	return nil, fmt.Errorf("cannot convert %T into %s", value, cassType.String())
 }
 
@@ -313,6 +322,7 @@ func toDecimal(value interface{}, cassType CassType) (*primitiveTypedVal, error)
 	case *Decimal:
 		return &primitiveTypedVal{value, cassType}, nil
 	}
+
 	return nil, fmt.Errorf("cannot convert %T into %s", value, cassType.String())
 }
 
@@ -321,6 +331,7 @@ func toUUID(value interface{}, cassType CassType) (*primitiveTypedVal, error) {
 	if value, ok := value.(UUID); ok {
 		return &primitiveTypedVal{value, cassType}, nil
 	}
+
 	return nil, fmt.Errorf("cannot convert %T into %s", value, cassType.String())
 }
 
@@ -423,6 +434,41 @@ func toBlob(value interface{}, cassType CassType) (*primitiveTypedVal, error) {
 	return nil, fmt.Errorf("cannot convert %T into %s", value, cassType.String())
 }
 
+func toTuple(value interface{}, dataType CassType) (*tupleTypedVal, error) {
+	switch value := value.(type) {
+	case *Tuple:
+		sz := len(value.Kind().subtypes)
+		// FIXME: cptr must be freed C.cass_tuple_free(cptr)
+		cptr := C.cass_tuple_new(C.size_t(sz))
+		ttv := &tupleTypedVal{cptr, dataType}
+
+		tupleVals := value.Values()
+
+		for idx := 0; idx < sz; idx++ {
+			if idx >= len(tupleVals) {
+				C.cass_tuple_set_null(cptr, C.size_t(idx))
+				continue
+			}
+			v := value.Get(idx)
+			if v == nil {
+				C.cass_tuple_set_null(cptr, C.size_t(idx))
+				continue
+			}
+			tv, err := newCassTypedVal(v, value.Kind().subtypes[idx])
+			if err != nil {
+				return nil, err
+			}
+			defer tv.Free()
+			if err = tv.BindTo(ttv, idx); err != nil {
+				return nil, err
+			}
+		}
+		return ttv, nil
+	}
+
+	return nil, fmt.Errorf("cannot convert %T into %s", value, dataType.String())
+}
+
 func toList(value interface{}, dataType CassType) (*collectionTypedVal, error) {
 	rVal := reflect.ValueOf(value)
 	switch rVal.Type().Kind() {
@@ -441,7 +487,8 @@ func toList(value interface{}, dataType CassType) (*collectionTypedVal, error) {
 			if err != nil {
 				return nil, err
 			}
-			if elemDataType.equals(CUnknown) {
+			defer tv.Free()
+			if elemDataType.Equals(CUnknown) {
 				elemDataType = tv.Kind()
 				ctv.kind = ctv.kind.Specialize(elemDataType)
 			}
@@ -478,7 +525,8 @@ func toMap(value interface{}, dataType CassType) (*collectionTypedVal, error) {
 		if err != nil {
 			return nil, err
 		}
-		if keyDataType.equals(CUnknown) {
+		defer tv.Free()
+		if keyDataType.Equals(CUnknown) {
 			keyDataType = tv.Kind()
 		}
 		if err = tv.BindTo(ctv, -1); err != nil {
@@ -488,7 +536,8 @@ func toMap(value interface{}, dataType CassType) (*collectionTypedVal, error) {
 		if err != nil {
 			return nil, err
 		}
-		if valDataType.equals(CUnknown) {
+		defer tv.Free()
+		if valDataType.Equals(CUnknown) {
 			valDataType = tv.Kind()
 			ctv.kind = ctv.kind.Specialize(keyDataType, valDataType)
 		}
@@ -527,7 +576,8 @@ func toSet(value interface{}, dataType CassType) (*collectionTypedVal, error) {
 			if err != nil {
 				return nil, err
 			}
-			if elemDataType.equals(CUnknown) {
+			defer tv.Free()
+			if elemDataType.Equals(CUnknown) {
 				elemDataType = tv.Kind()
 				ctv.kind = ctv.kind.Specialize(elemDataType)
 			}
@@ -557,7 +607,8 @@ func toSet(value interface{}, dataType CassType) (*collectionTypedVal, error) {
 			if err != nil {
 				return nil, err
 			}
-			if elemDataType.equals(CUnknown) {
+			defer tv.Free()
+			if elemDataType.Equals(CUnknown) {
 				elemDataType = tv.Kind()
 				ctv.kind = ctv.kind.Specialize(elemDataType)
 			}
@@ -575,9 +626,12 @@ func toSet(value interface{}, dataType CassType) (*collectionTypedVal, error) {
 // implements internal `typedValue` interface
 func (ctv collectionTypedVal) BindTo(dst interface{}, index int) error {
 	var retc C.CassError
+	pos := C.size_t(index)
 	switch dst := dst.(type) {
 	case *Statement:
-		retc = C.cass_statement_bind_collection(dst.cptr, C.size_t(index), ctv.cptr)
+		retc = C.cass_statement_bind_collection(dst.cptr, pos, ctv.cptr)
+	case *tupleTypedVal:
+		retc = C.cass_tuple_set_collection(dst.cptr, pos, ctv.cptr)
 	}
 	if retc != C.CASS_OK {
 		return newError(retc)
@@ -588,6 +642,36 @@ func (ctv collectionTypedVal) BindTo(dst interface{}, index int) error {
 
 func (ctv collectionTypedVal) Kind() CassType {
 	return ctv.kind
+}
+
+func (ctv collectionTypedVal) Free() {
+	C.cass_collection_free(ctv.cptr)
+}
+
+func (ttv tupleTypedVal) BindTo(dst interface{}, index int) error {
+	var retc C.CassError
+	pos := C.size_t(index)
+	switch dst := dst.(type) {
+	case *Statement:
+		retc = C.cass_statement_bind_tuple(dst.cptr, pos, ttv.cptr)
+	case *collectionTypedVal:
+		retc = C.cass_collection_append_tuple(dst.cptr, ttv.cptr)
+	case *tupleTypedVal:
+		retc = C.cass_tuple_set_tuple(dst.cptr, pos, ttv.cptr)
+	}
+	if retc != C.CASS_OK {
+		return newError(retc)
+	}
+
+	return nil
+}
+
+func (ttv tupleTypedVal) Kind() CassType {
+	return ttv.kind
+}
+
+func (ttv tupleTypedVal) Free() {
+	C.cass_tuple_free(ttv.cptr)
 }
 
 // implements internal `typedValue` interface
@@ -605,6 +689,8 @@ func (ptv primitiveTypedVal) BindTo(dst interface{}, index int) error {
 			retc = C.cass_statement_bind_string(dst.cptr, pos, cstr)
 		case *collectionTypedVal:
 			retc = C.cass_collection_append_string(dst.cptr, cstr)
+		case *tupleTypedVal:
+			retc = C.cass_tuple_set_string(dst.cptr, pos, cstr)
 		}
 	case CASS_VALUE_TYPE_BOOLEAN:
 		val := C.cass_bool_t(ptv.val.(int))
@@ -613,6 +699,8 @@ func (ptv primitiveTypedVal) BindTo(dst interface{}, index int) error {
 			retc = C.cass_statement_bind_bool(dst.cptr, pos, val)
 		case *collectionTypedVal:
 			retc = C.cass_collection_append_bool(dst.cptr, val)
+		case *tupleTypedVal:
+			retc = C.cass_tuple_set_bool(dst.cptr, pos, val)
 		}
 		// int types (not yet VARINT)
 	case CASS_VALUE_TYPE_BIGINT, CASS_VALUE_TYPE_TIMESTAMP, CASS_VALUE_TYPE_TIME:
@@ -622,6 +710,8 @@ func (ptv primitiveTypedVal) BindTo(dst interface{}, index int) error {
 			retc = C.cass_statement_bind_int64(dst.cptr, pos, val)
 		case *collectionTypedVal:
 			retc = C.cass_collection_append_int64(dst.cptr, val)
+		case *tupleTypedVal:
+			retc = C.cass_tuple_set_int64(dst.cptr, pos, val)
 		}
 	case CASS_VALUE_TYPE_INT:
 		var ival C.cass_int32_t
@@ -639,6 +729,8 @@ func (ptv primitiveTypedVal) BindTo(dst interface{}, index int) error {
 			retc = C.cass_statement_bind_int32(dst.cptr, pos, ival)
 		case *collectionTypedVal:
 			retc = C.cass_collection_append_int32(dst.cptr, ival)
+		case *tupleTypedVal:
+			retc = C.cass_tuple_set_int32(dst.cptr, pos, ival)
 		}
 	case CASS_VALUE_TYPE_SMALL_INT:
 		val := C.cass_int16_t(ptv.val.(int16))
@@ -647,6 +739,8 @@ func (ptv primitiveTypedVal) BindTo(dst interface{}, index int) error {
 			retc = C.cass_statement_bind_int16(dst.cptr, pos, val)
 		case *collectionTypedVal:
 			retc = C.cass_collection_append_int16(dst.cptr, val)
+		case *tupleTypedVal:
+			retc = C.cass_tuple_set_int16(dst.cptr, pos, val)
 		}
 	case CASS_VALUE_TYPE_TINY_INT:
 		val := C.cass_int8_t(ptv.val.(int8))
@@ -655,6 +749,8 @@ func (ptv primitiveTypedVal) BindTo(dst interface{}, index int) error {
 			retc = C.cass_statement_bind_int8(dst.cptr, pos, val)
 		case *collectionTypedVal:
 			retc = C.cass_collection_append_int8(dst.cptr, val)
+		case *tupleTypedVal:
+			retc = C.cass_tuple_set_int8(dst.cptr, pos, val)
 		}
 	// float types (not yet DECIMAL)
 	case CASS_VALUE_TYPE_FLOAT:
@@ -664,6 +760,8 @@ func (ptv primitiveTypedVal) BindTo(dst interface{}, index int) error {
 			retc = C.cass_statement_bind_float(dst.cptr, pos, val)
 		case *collectionTypedVal:
 			retc = C.cass_collection_append_float(dst.cptr, val)
+		case *tupleTypedVal:
+			retc = C.cass_tuple_set_float(dst.cptr, pos, val)
 		}
 	case CASS_VALUE_TYPE_DOUBLE:
 		val := C.cass_double_t(ptv.val.(float64))
@@ -672,6 +770,8 @@ func (ptv primitiveTypedVal) BindTo(dst interface{}, index int) error {
 			retc = C.cass_statement_bind_double(dst.cptr, pos, val)
 		case *collectionTypedVal:
 			retc = C.cass_collection_append_double(dst.cptr, val)
+		case *tupleTypedVal:
+			retc = C.cass_tuple_set_double(dst.cptr, pos, val)
 		}
 	case CASS_VALUE_TYPE_DECIMAL:
 		val := ptv.val.(*Decimal)
@@ -685,6 +785,11 @@ func (ptv primitiveTypedVal) BindTo(dst interface{}, index int) error {
 			retc = C.cass_collection_append_decimal(dst.cptr,
 				(*C.cass_byte_t)(unsafe.Pointer(&buf[0])), C.size_t(len(buf)),
 				C.cass_int32_t(val.Scale))
+		case *tupleTypedVal:
+			retc = C.cass_tuple_set_decimal(dst.cptr, pos,
+				(*C.cass_byte_t)(unsafe.Pointer(&buf[0])), C.size_t(len(buf)),
+				C.cass_int32_t(val.Scale))
+
 		}
 	case CASS_VALUE_TYPE_UUID, CASS_VALUE_TYPE_TIMEUUID:
 		cStr := C.CString(ptv.val.(UUID).String())
@@ -697,6 +802,8 @@ func (ptv primitiveTypedVal) BindTo(dst interface{}, index int) error {
 				retc = C.cass_statement_bind_uuid(dst.cptr, pos, cUuid)
 			case *collectionTypedVal:
 				retc = C.cass_collection_append_uuid(dst.cptr, cUuid)
+			case *tupleTypedVal:
+				retc = C.cass_tuple_set_uuid(dst.cptr, pos, cUuid)
 			}
 		}
 	case CASS_VALUE_TYPE_DATE:
@@ -706,6 +813,8 @@ func (ptv primitiveTypedVal) BindTo(dst interface{}, index int) error {
 			retc = C.cass_statement_bind_uint32(dst.cptr, pos, val)
 		case *collectionTypedVal:
 			retc = C.cass_collection_append_uint32(dst.cptr, val)
+		case *tupleTypedVal:
+			retc = C.cass_tuple_set_uint32(dst.cptr, pos, val)
 		}
 	case CASS_VALUE_TYPE_INET:
 		val := ptv.val.([]byte)
@@ -719,6 +828,8 @@ func (ptv primitiveTypedVal) BindTo(dst interface{}, index int) error {
 			retc = C.cass_statement_bind_inet(dst.cptr, pos, cInet)
 		case *collectionTypedVal:
 			retc = C.cass_collection_append_inet(dst.cptr, cInet)
+		case *tupleTypedVal:
+			retc = C.cass_tuple_set_inet(dst.cptr, pos, cInet)
 		}
 	case CASS_VALUE_TYPE_BLOB, CASS_VALUE_TYPE_VARINT:
 		val := ptv.val.([]byte)
@@ -728,6 +839,9 @@ func (ptv primitiveTypedVal) BindTo(dst interface{}, index int) error {
 				(*C.cass_byte_t)(unsafe.Pointer(&val[0])), C.size_t(len(val)))
 		case *collectionTypedVal:
 			retc = C.cass_collection_append_bytes(dst.cptr,
+				(*C.cass_byte_t)(unsafe.Pointer(&val[0])), C.size_t(len(val)))
+		case *tupleTypedVal:
+			retc = C.cass_tuple_set_bytes(dst.cptr, pos,
 				(*C.cass_byte_t)(unsafe.Pointer(&val[0])), C.size_t(len(val)))
 		}
 	}
@@ -742,3 +856,5 @@ func (ptv primitiveTypedVal) BindTo(dst interface{}, index int) error {
 func (ptv primitiveTypedVal) Kind() CassType {
 	return ptv.kind
 }
+
+func (ptv primitiveTypedVal) Free() {}
