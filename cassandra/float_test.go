@@ -85,6 +85,6 @@ var (
 	}
 
 	floatCleanup = []string{
-	// "DROP TABLE golang_driver.floats",
+		"DROP TABLE golang_driver.floats",
 	}
 )

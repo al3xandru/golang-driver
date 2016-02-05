@@ -169,6 +169,6 @@ var (
 	}
 
 	bignumbersCleanup = []string{
-	// "DROP TABLE golang_driver.bignumbers",
+		"DROP TABLE golang_driver.bignumbers",
 	}
 )
